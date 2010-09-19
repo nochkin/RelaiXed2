@@ -109,7 +109,7 @@ void USBCheckBusStatus(void)
         if(!UCONbits.SE0)
         {
             UIR = 0;                        // Clear all USB interrupts
-            UIE = 0;                        // Mask all USB interrupts
+            //UIE = 0;                        // Mask all USB interrupts
             UIEbits.URSTIE = 1;             // Unmask RESET interrupt
             UIEbits.IDLEIE = 1;             // Unmask IDLE interrupt
             usb_device_state = POWERED_STATE;
@@ -246,7 +246,7 @@ void USBDriverService(void)
      * Task C: Service other USB interrupts
      */
     if(UIRbits.IDLEIF && UIEbits.IDLEIE)    USBSuspend();
-//    if(UIRbits.SOFIF && UIEbits.SOFIE)      USB_SOF_Handler();
+    if(UIRbits.SOFIF && UIEbits.SOFIE)      USB_SOF_Handler();
     if(UIRbits.STALLIF && UIEbits.STALLIE)  USBStallHandler();
 //    if(UIRbits.UERRIF && UIEbits.UERRIE)    USBErrorHandler();
 
@@ -381,7 +381,7 @@ void USBSuspend(void)
     PIR2bits.USBIF = 0;		//Won't get clear if an enabled and pending wake up source was already triggered
     						//However, since only the ACTVIF interrupt source is currently enabled,
     						//only bus activity events will prevent entry into sleep.
-    						
+#ifdef usbOnlyOperationJVE    						
     PIE2bits.USBIE = 1;     // Set USB wakeup source
 
 	Sleep();				// Go to sleep, wake up when a USB activity event occurs
@@ -414,7 +414,8 @@ void USBSuspend(void)
     {
 	    ClrWdt();
 	} 
-	//Primary oscillator and PLL should be running by now.
+	//Primary oscillator and PLL should be running by now
+#endif
 
     /* End Modifiable Section */
 
@@ -560,12 +561,12 @@ PLL to lock.
  *
  * Note:            None
  *****************************************************************************/
-//void USB_SOF_Handler(void)
-//{
-//    /* Callback routine here */
-//
-//    UIRbits.SOFIF = 0;
-//}//end USB_SOF_Handler
+void USB_SOF_Handler(void)
+{
+    /* Callback routine here */
+
+    UIRbits.SOFIF = 0;
+}//end USB_SOF_Handler
 
 /******************************************************************************
  * Function:        void USBStallHandler(void)
@@ -717,7 +718,8 @@ void USBProtocolResetHandler(void)
     UEIR = 0;                       // Clear all USB error flags
     UIR = 0;                        // Clears all USB interrupts
     UEIE = 0b10011111;              // Unmask all USB error interrupts
-    UIE = 0b01111011;               // Enable all interrupts except ACTVIE
+    //UIE = 0b01111011;               // Enable all interrupts except ACTVIE
+    UIE = 0b00111011;               // Enable all interrupts except ACTVIE and SOFIE
 
     UADDR = 0x00;                   // Reset to default address
     mDisableEP1to15();              // Reset all non-EP0 UEPn registers

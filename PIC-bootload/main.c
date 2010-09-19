@@ -188,7 +188,7 @@ _entry (void)
 	nop							//Address: 0x06		//Filler to waste 2 byte of program memory
 
 	//HIGH PRIORITY INTRRUPT VECTOR at address 0x08
-    goto 0x1008					//Address: 0x08		//If a high priority interrupt occurs, PC first goes to 0x0008, then executes "goto 0x1008" redirect
+    goto 0x2008					//Address: 0x08		//If a high priority interrupt occurs, PC first goes to 0x0008, then executes "goto 0x1008" redirect
 
 BootEntryIOCheck:
 	//Perform an I/O pin check to see if we should enter either the main application firmware, or this bootloader firmware.
@@ -204,7 +204,7 @@ BootEntryIOCheck:
     goto	0x1000				//Address: 0x14		//Goto the main application firmware, user was not pressing the pushbutton to enter bootloader
     
 	//LOW PRIORITY INTERRUPT VECTOR at address 0x18    
-    goto	0x1018				//Address: 0x18		//If a low-priority interrupt occurs, PC first goes to 0x0018, then executes "goto 0x1018" redirect
+    goto	0x2018				//Address: 0x18		//If a low-priority interrupt occurs, PC first goes to 0x0018, then executes "goto 0x1018" redirect
 	_endasm
 
 BootAppStart:					//Address: 0x1C		//If executing the main application firmware, and user wishes to enter the bootloader
@@ -256,19 +256,17 @@ void Main(void)
 
     InitializeSystem();		//Some USB, I/O pins, and other initialization
 
-    while(1)
-    {
-		ClrWdt();		
-	    USBTasks();		        // Need to call USBTasks() periodically
-	    						// it handles SETUP packets needed for enumeration
-
-		BlinkUSBStatus();		//Blink the LEDs based on current USB state
-		
-	    if((usb_device_state == CONFIGURED_STATE) && (UCONbits.SUSPND != 1))
-	    {
- 	       ProcessIO();   // This is where all the actual bootloader related data transfer/self programming takes place
- 	    }				  // see ProcessIO() function in the Boot87J50Family.c file.
-    }//end while	
+    USBTasks(); // check for first USB stuff
+    
+    UIE = 0xff;          // allow USB interrupts
+	PIE2bits.USBIE  = 1; // allow USB interrupts
+	INTCONbits.GIEL = 1; // allow all low-priority interrupts (among which the USB interrupts)
+	INTCONbits.GIEH = 1; // also allow high-priority interrupts (prerequisite for low-priority ints)
+	mLED_1_On();
+	_asm
+		goto ProgramMemStart			// Assume the user app has its own main loop.
+	_endasm
+	// we will never return here
 }	
 
 /******************************************************************************
@@ -370,7 +368,13 @@ static void InitializeSystem(void)
     tris_self_power = INPUT_PIN;
     #endif
     
-    mInitializeUSBDriver();         // See usbdrv.h
+    RCONbits.IPEN  = 1; // enable the interrupt priority feature
+    IPR2bits.USBIP = 0; // low priority USB interrupts
+	PIE2bits.USBIE = 0; // not yet allow USB interrupts
+
+    //UARTinit();
+    
+   	mInitializeUSBDriver();         // See usbdrv.h
     
     UserInit();                     // See Boot46J50Family.c.  Initializes the bootloader firmware state machine variables.
 
@@ -391,6 +395,9 @@ static void InitializeSystem(void)
 	
 	ANCON0 = 0x00;			//All analog, to disable the digital input buffers
 	ANCON1 = 0x00;			//All analog, digital input buffers off, bandgap off
+
+	//setup Timer1: count Fosc/4 with pre=8: cnt rate = 48MHz/4/8=1.5MHz, wrap-aroud is 1.5M/64K = 22,888Hz
+    T1CON = 0x3d;
 
 }//end InitializeSystem
 
@@ -414,7 +421,9 @@ void USBTasks(void)
     /*
      * Servicing Hardware
      */
-    USBCheckBusStatus();                    // Must use polling method
+    do
+    {   USBCheckBusStatus();                    // Must use polling method
+    } while (usb_device_state == 1);
     USBDriverService();              	    // Interrupt or polling method
 
 }// end USBTasks

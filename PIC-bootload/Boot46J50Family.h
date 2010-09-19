@@ -36,9 +36,14 @@
 #ifndef BOOT46J50FAMILY_H
 #define BOOT46J50FAMILY_H
 
+#define ProgramMemStart	0x002000 //Beginning of application program memory
+                        // JvE modified from 0x001000 to 0x002000
+                        //(not occupied by bootloader). 
+
 /** P U B L I C  P R O T O T Y P E S *****************************************/
-void UserInit(void);
-void ProcessIO(void);
+extern void UserInit(void);
+extern void ProcessIO(void);
+extern void ProcessBootLoad(void);
 
 
 #endif //BOOT46J50FAMILY_H
