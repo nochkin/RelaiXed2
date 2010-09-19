@@ -242,7 +242,7 @@ sizeof(sd001),DSC_STR,
 
 rom struct{byte bLength;byte bDscType;word string[18];}sd002={
 sizeof(sd002),DSC_STR,
-'H','I','D',' ','U','S','B',' ','B','o','o',
+'H','I','D',' ','R','L','X',' ','B','o','o',
 't','l','o','a','d','e','r'};
 
 rom struct{byte report[HID_RPT01_SIZE];}hid_rpt01={

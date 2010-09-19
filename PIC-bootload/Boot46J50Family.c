@@ -39,8 +39,8 @@
 /** C O N S T A N T S **********************************************************/
 
 //Section defining the address range to erase for the erase device command, along with the valid programming range to be reported by the QUERY_DEVICE command.
-#define StartPageToErase				4		 //The 1024 byte page starting at address 0x1000 will be erased.
-#define ProgramMemStart					0x001000 //Beginning of application program memory (not occupied by bootloader).  **THIS VALUE MUST BE ALIGNED WITH 64 BYTE BLOCK BOUNDRY** Also, in order to work correctly, make sure the StartPageToErase is set to erase this section.
+#define ProgramMemStart					0x002000 //Beginning of application program memory (not occupied by bootloader).  **THIS VALUE MUST BE ALIGNED WITH 64 BYTE BLOCK BOUNDRY** Also, in order to work correctly, make sure the StartPageToErase is set to erase this section.
+#define StartPageToErase				(ProgramMemStart>>10)	//The 1024 byte page starting at 'ProgramMemStart' will be erased.
 #define ConfigWordsSectionLength		0x08	//8 bytes worth of Configuration words on the PIC18F87J50 family devices
 
 //#if defined(__18F87J50)||defined(__18F67J50)
@@ -168,7 +168,7 @@ typedef union
 	
 
 /** V A R I A B L E S ********************************************************/
-#pragma udata 
+#pragma udata SectionBootLoader
 unsigned char MaxPageToErase;
 unsigned short long ProgramMemStopAddress;
 PacketToFromPC PacketFromPC;
@@ -217,6 +217,31 @@ void UserInit(void)
  *
  * Note:            None
  *****************************************************************************/
+ 
+ /******************************************************************************
+ * JvE: We enter this bootloadprocess from a USB interrupt.
+ * Unlike a 'normal' ISR, we stay in here.
+ * Stay in bootloader process while active with PC, then Reset.
+ *****************************************************************************/
+void ProcessBootLoad(void)
+{
+	while (BootState != Idle || !mHIDRxIsBusy())
+	{
+		ProcessIO();
+
+		ClrWdt();
+		IPR2bits.USBIP = 0; // low priority
+		PIE2bits.USBIE = 1;
+
+		Sleep(); // wait for interupt
+	}
+	//Reset();
+	// Goto reset-address of newly loaded program: init its vars, reset its stack
+	// but keep the current state of my USB subsystem
+	// Hmm... the intended 'goto ProgramMemStart' does not work, it locks the USB line :-(
+	//_asm goto ProgramMemStart _endasm
+}
+
 void ProcessIO(void)
 {
 	unsigned char i;
@@ -279,7 +304,7 @@ void ProcessIO(void)
 				{
 					ClrWdt();
 					EraseFlash();
-					USBDriverService(); 	//Call USBDriverService() periodically to prevent falling off the bus if any SETUP packets should happen to arrive.
+					//USBDriverService(); 	//Call USBDriverService() periodically to prevent falling off the bus if any SETUP packets should happen to arrive.
 				}
 				BootState = Idle;				
 			}
@@ -356,6 +381,7 @@ void ProcessIO(void)
 
 void EraseFlash(void)
 {
+	BYTE b = INTCON;
 //Really want this: TBLPTR = ((unsigned short long)ErasePageTracker << 10); but compiler not very efficient at this, so instead do this:
 	TBLPTRL = 0x00;
 	TBLPTRH = ErasePageTracker;
@@ -370,7 +396,7 @@ void EraseFlash(void)
 
 	EECON1 = 0b00010100;
 
-	INTCONbits.GIE = 0;	//Make certain interrupts disabled for unlock process.
+	INTCONbits.GIEH = 0;	//Make certain interrupts disabled for unlock process.
 	_asm
 	MOVLW 0x55
 	MOVWF EECON2, 0
@@ -380,12 +406,14 @@ void EraseFlash(void)
 	_endasm
 
 	EECON1bits.WREN = 0;  //Good practice now to clear the WREN bit, as further protection against any future accidental activation of self write/erase operations.
+	INTCONbits.GIEH = b.b7;
 }	
 
 
 void WriteFlashSubBlock(void)		//Use word writes to write code chunks less than a full 64 byte block size.
 {
 	unsigned char i = 0;
+	BYTE b;
 
 	while(BufferedDataIndex > 0)		//While data is still in the buffer.
 	{
@@ -403,7 +431,8 @@ void WriteFlashSubBlock(void)		//Use word writes to write code chunks less than 
 		i++;
 		
 		EECON1 = 0b00100100;	//Word programming mode
-		INTCONbits.GIE = 0;		//Make certain interrupts disabled for unlock process.
+		b = INTCON;
+		INTCONbits.GIEH = 0;		//Make certain interrupts disabled for unlock process.
 		_asm
 		MOVLW 0x55
 		MOVWF EECON2, 0
@@ -412,6 +441,8 @@ void WriteFlashSubBlock(void)		//Use word writes to write code chunks less than 
 		BSF EECON1, 1, 0		//Initiates write operation (halts CPU execution until complete)
 		_endasm		
 
+
+		INTCONbits.GIEH = b.b7;
 		BufferedDataIndex = BufferedDataIndex - WORDSIZE;	//Used up one word from the buffer.
 	}
 	EECON1bits.WREN = 0;  //Good practice now to clear the WREN bit, as further protection against any accidental activation of self write/erase operations.
