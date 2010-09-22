@@ -148,9 +148,31 @@ project will have to be modified to make the BootPage section larger.
      #pragma config WPCFG = OFF          //Write/Erase last page protect Disabled
      #pragma config WPDIS = OFF          //WPFP[5:0], WPEND, and WPCFG bits ignored 
 //If using the YOUR_BOARD hardware platform (see usbcfg.h), uncomment below and add pragmas
-//#elif defined(YOUR_BOARD)
-		//Add the configuration pragmas here for your hardware platform
-		//#pragma config ... 		= ...
+#elif defined(RELAIXED2)
+	 //Add the configuration pragmas here for your hardware platform
+     #pragma config WDTEN = OFF          //WDT disabled (enabled by SWDTEN bit)
+     #pragma config PLLDIV = 3           //Divide by 3 (12 MHz oscillator input)
+     #pragma config STVREN = ON          //stack overflow/underflow reset enabled
+     #pragma config XINST = OFF          //Extended instruction set disabled
+     #pragma config CPUDIV = OSC1        //No CPU system clock divide
+     #pragma config CP0 = OFF            //Program memory is not code-protected
+     #pragma config OSC = HSPLL          //HS oscillator, PLL enabled, HSPLL used by USB
+     #pragma config T1DIG = OFF          //Sec Osc clock source may not be selected, unless T1OSCEN = 1
+     #pragma config LPT1OSC = OFF        //high power Timer1 mode
+     #pragma config FCMEN = OFF          //Fail-Safe Clock Monitor disabled
+     #pragma config IESO = OFF           //Two-Speed Start-up disabled
+     #pragma config WDTPS = 32768        //1:32768
+     #pragma config DSWDTOSC = INTOSCREF //DSWDT uses INTOSC/INTRC as clock
+     #pragma config RTCOSC = T1OSCREF    //RTCC uses T1OSC/T1CKI as clock
+     #pragma config DSBOREN = OFF        //Zero-Power BOR disabled in Deep Sleep
+     #pragma config DSWDTEN = OFF        //Disabled
+     #pragma config DSWDTPS = 8192       //1:8,192 (8.5 seconds)
+     #pragma config IOL1WAY = OFF        //IOLOCK bit can be set and cleared
+     #pragma config MSSP7B_EN = MSK7     //7 Bit address masking
+     #pragma config WPFP = PAGE_1        //Write Protect Program Flash Page 0
+     #pragma config WPEND = PAGE_0       //Start protection at page 0
+     #pragma config WPCFG = OFF          //Write/Erase last page protect Disabled
+     #pragma config WPDIS = OFF          //WPFP[5:0], WPEND, and WPCFG bits ignored 
 
 #else
 	#error Not a supported board (yet), make sure the proper board is selected in usbcfg.h, and if so, set configuration bits in __FILE__, line __LINE__
@@ -168,94 +190,18 @@ static void InitializeSystem(void);
 void USBTasks(void);
 void BlinkUSBStatus(void);
 void Main(void);
-void _entry (void);
+
 //externs
 extern void LongDelay(void);
 
 
-
-//Be careful if modifying the below code.  The below code is absolute address sensitive, since it contains
-//the reset and high/low priority interrupt vectors, as well as the bootloader entry point "BootAppStart:" at address 0x001C.
-//note: On PIC18, "goto" instructions take 4 byte of program memory, while most other instructions take only 2 bytes each
-#pragma code _entry_scn=0x000000		//Reset vector is at 0x00.  Device begins executing code from 0x00 after a reset or POR event
-void
-_entry (void)
-{
-	_asm
-	movlb	0x0F				//Address: 0x00		//Will be checking RB2 pushbutton state, but need to set ANCON1<PCFG8> bit first. ANCON1 register is not in access bank
-	bsf		ANCON1, 0, 1		//Address: 0x02		//Configure RB2/AN8 as digital input
-	bra		BootEntryIOCheck	//Address: 0x04		//bra BootEntryIOCheck skips past the high-priority interrupt redirect
-	nop							//Address: 0x06		//Filler to waste 2 byte of program memory
-
-	//HIGH PRIORITY INTRRUPT VECTOR at address 0x08
-    goto 0x2008					//Address: 0x08		//If a high priority interrupt occurs, PC first goes to 0x0008, then executes "goto 0x1008" redirect
-
-BootEntryIOCheck:
-	//Perform an I/O pin check to see if we should enter either the main application firmware, or this bootloader firmware.
-	//Currently using RB2 I/O pin for this purpose.  If pushbutton pressed (RB2 = 0), enter bootloader firmware.
-	//If not pressed (RB2 = 1, due to pull up resistor), enter the main application firmware instead.
-    btfss	PORTB, 2, 0			//Address: 0x0C		//Check RB2 I/O pin state	
-    bra		BootAppStart		//Address: 0x0E		//If pushbutton pressed, enter bootloader	
-
-	//Otherwise, need to enter the main application firmware.
-	//Should restore state of BSR and ANCON1 registers to default state first.
-	bcf		ANCON1, 0, 1		//Address: 0x10		//Restore ANCON1<PCFG8> bit to default
-	movlb	0x00				//Address: 0x12		//Restore BSR to POR default
-    goto	0x1000				//Address: 0x14		//Goto the main application firmware, user was not pressing the pushbutton to enter bootloader
-    
-	//LOW PRIORITY INTERRUPT VECTOR at address 0x18    
-    goto	0x2018				//Address: 0x18		//If a low-priority interrupt occurs, PC first goes to 0x0018, then executes "goto 0x1018" redirect
-	_endasm
-
-BootAppStart:					//Address: 0x1C		//If executing the main application firmware, and user wishes to enter the bootloader
-    												//simply execute an "_asm goto 0x001C _endasm" instruction.  This will go to this BootAppStart section,
-    												//which in turn will enter the bootloader firmware.
-	Main();
-}	
-
-
 /** D E C L A R A T I O N S **************************************************/
 #pragma code
-/******************************************************************************
- * Function:        void Main(void)
- *
- * PreCondition:    None
- *
- * Input:           None
- *
- * Output:          None
- *
- * Side Effects:    None
- *
- * Overview:        Main bootloader firmware entry point.
- *
- * Note:            None
- *****************************************************************************/
-
-void Main(void)
-{
-	//NOTE: The c018.o file is not included in the linker script for this project.
-	//The C initialization code in the c018.c (comes with C18 compiler in the src directory)
-	//file is instead modified and included here manually.  This is done so as to provide
-	//a more convenient entry method into the bootloader firmware.  Ordinarilyy the _entry_scn
-	//program code section starts at 0x00 and is created by the code of c018.o.  However,
-	//the linker will not work if there is more than one section of code trying to occupy 0x00.
-	//Therefore, must not use the c018.o code, must instead manually include the useful code
-	//here instead.
-
-    // Initialize the C stack pointer, and other compiler managed items as normally done in the c018.c file.
-	_asm
-    lfsr 1, _stack
-    lfsr 2, _stack
-    clrf TBLPTRU, 0 
-	_endasm
-	// End of the important parts of the C initializer.  This bootloader firmware does not use
-	// any C initialized user variables (idata memory sections).  Therefore, the above is all
-	// the initialization that is required.
-
-
-    InitializeSystem();		//Some USB, I/O pins, and other initialization
-
+void main(void)
+{   
+	mInitAllLEDs();
+	
+    InitializeSystem();
     USBTasks(); // check for first USB stuff
     
     UIE = 0xff;          // allow USB interrupts
@@ -267,7 +213,8 @@ void Main(void)
 		goto ProgramMemStart			// Assume the user app has its own main loop.
 	_endasm
 	// we will never return here
-}	
+}//end main
+
 
 /******************************************************************************
  * Function:        static void InitializeSystem(void)
@@ -371,30 +318,29 @@ static void InitializeSystem(void)
     RCONbits.IPEN  = 1; // enable the interrupt priority feature
     IPR2bits.USBIP = 0; // low priority USB interrupts
 	PIE2bits.USBIE = 0; // not yet allow USB interrupts
-
-    //UARTinit();
-    
+	
+	// PORTA: all inputs, no interrupt-on-change facility :-(...
+	PORTA = 0; TRISA = 0xFF; // A all inputs
+	ADCON0 = 0; ANCON0 = 0xFF; ANCON1 = 0x1F; // disable AD converter, all digital IO
+	
+	// PORTB: use all-input config, use open-drain output style
+	// The I2C pins must also be configured in input mode.
+	PORTB = 0; TRISB = 0xFF; // B all inputs
+	INTCON2bits.RBPU = 0; // use weak pull-up for RB67
+	
+	// PORTC: all input except 7
+	PORTC = 0x80; TRISC = 0x7F;
+	
+	// setup I2C peripheral (not really needed for the bootloader operation)
+	SSP1CON1 = 0x28; // enable I2C master mode
+	SSP1ADD = 0x63; // 100kHz bitrate from 40MHz system clock
+	
    	mInitializeUSBDriver();         // See usbdrv.h
-    
+
     UserInit();                     // See Boot46J50Family.c.  Initializes the bootloader firmware state machine variables.
 
 	led_count = 0;			//Initialize variable used to toggle LEDs
     mInitAllLEDs();			//Init them off.
-
-	//Initialize I/O pins for "lowest" power.  When in USB suspend mode, total +5V VBUS current consumption 
-	//should reduce to <2.5mA in order to meet USB compliance specifications.
-
-	//Ordinarily, to initialize I/O pins for lowest power, any unused I/O pins would be configured
-	//as outputs and driven either high or low.  However, if this code is left unmodified, but is used in a real
-	//application, I/O pins as outputs could cause contention with externally connected signals.  Therefore
-	//this code does not actually drive unused I/Os as outputs, but uses "softer" methods, like making
-	//analog capable pins as analog (to disable the digital input buffer, which wastes power when left floating)
-
-	//This code should be replaced with code more specific to the intended target application I/O pin usage.
-	//The below code by itself will not achieve the lowest possible power consumption.
-	
-	ANCON0 = 0x00;			//All analog, to disable the digital input buffers
-	ANCON1 = 0x00;			//All analog, digital input buffers off, bandgap off
 
 	//setup Timer1: count Fosc/4 with pre=8: cnt rate = 48MHz/4/8=1.5MHz, wrap-aroud is 1.5M/64K = 22,888Hz
     T1CON = 0x3d;
@@ -470,17 +416,4 @@ void BlinkUSBStatus(void)
 
 }//end BlinkUSBStatus
 
-
-
-
-
-//Placeholder code at address 0x1000 (the start of the non-bootloader firmware space)
-//This gets overwritten when a real hex file gets programmed by the bootloader.
-//If however no hex file has been programmed, might as well stay in the bootloader
-//firmware, even if the RB2 pushbutton was not pressed after coming out of reset.
-#pragma code user_app_vector=0x1000	
-void userApp(void)
-{
-	_asm goto 0x001C _endasm 	//Goes to the "BootAppStart:" section which will enter the bootloader firmware				
-}
 /** EOF main.c ***************************************************************/
