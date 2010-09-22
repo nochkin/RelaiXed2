@@ -204,8 +204,44 @@
 /********************************************************************/
 
 //Uncomment below if using the YOUR_BOARD hardware platform
-//#elif defined(YOUR_BOARD)
+#elif defined(RELAIXED2)
 //Add your hardware specific I/O pin mapping here
+#define tris_usb_bus_sense  TRISCbits.TRISC6    // Input
+#define usb_bus_sense       PORTCbits.RC6
+#define self_power          1
+#define mInitAllLEDs()      TRISB = 0xFF; TRISC = 0x7F; PORTB = 0; PORTC = 0x80; // led-drivers are 'opendrain'
+// individual LEDs of right segment, in order of segmentled a, b, c, ...
+#define mLED_1              TRISBbits.TRISB2
+#define mLED_2              TRISBbits.TRISB0
+#define mLED_3              TRISCbits.TRISC1
+#define mLED_4              TRISCbits.TRISC0
+#define mLED_5              TRISCbits.TRISC2
+#define mLED_6              TRISBbits.TRISB1
+#define mLED_7              TRISBbits.TRISB3
+
+#define mLED_1_On()         mLED_1 = 0;
+#define mLED_2_On()         mLED_2 = 0;
+#define mLED_3_On()         mLED_3 = 0;
+#define mLED_4_On()         mLED_4 = 0;
+#define mLED_5_On()         mLED_5 = 0;
+#define mLED_6_On()         mLED_6 = 0;
+#define mLED_7_On()         mLED_7 = 0;
+
+#define mLED_1_Off()        mLED_1 = 1;
+#define mLED_2_Off()        mLED_2 = 1;
+#define mLED_3_Off()        mLED_3 = 1;
+#define mLED_4_Off()        mLED_4 = 1;
+#define mLED_5_Off()        mLED_5 = 1;
+#define mLED_6_Off()        mLED_6 = 1;
+#define mLED_7_Off()        mLED_7 = 1;
+
+#define mLED_1_Toggle()     mLED_1 = !mLED_1;
+#define mLED_2_Toggle()     mLED_2 = !mLED_2;
+#define mLED_3_Toggle()     mLED_3 = !mLED_3;
+#define mLED_4_Toggle()     mLED_4 = !mLED_4;
+#define mLED_5_Toggle()     mLED_5 = !mLED_5;
+#define mLED_6_Toggle()     mLED_6 = !mLED_6;
+#define mLED_7_Toggle()     mLED_7 = !mLED_7;
 
 #else
     #error Not a supported board (yet), add I/O pin mapping in __FILE__, line __LINE__

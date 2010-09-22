@@ -48,8 +48,8 @@
 /* Uncomment only the hardware platform that you are using*/
 //#define PIC18F4550_PICDEM_FS_USB
 //#define PIC18F87J50_FS_USB_PIM
-#define PIC18F46J50_PIM
-//#define YOUR_BOARD
+//#define PIC18F46J50_PIM
+#define RELAIXED2
 
 
 #if defined(PIC18F4550_PICDEM_FS_USB)
@@ -68,9 +68,9 @@
     //#define USE_USB_BUS_SENSE_IO		//JP1 must be in R-U position to use this feature on this board		
 
 /*If using the YOUR_BOARD selection, uncomment below section as appropriate for your hardware*/
-//#elif defined(YOUR_BOARD)
+#elif defined(RELAIXED2)
 	//#define USE_SELF_POWER_SENSE_IO	//See MCHPFSUSB Firmware User's Guide
-   	//#define USE_USB_BUS_SENSE_IO		//(DS51679) for more details about these features.
+   	#define USE_USB_BUS_SENSE_IO		//(DS51679) for more details about these features.
 
 #else
     #error Not a supported board (yet), See __FILE__, line __LINE__, or double click on this text.

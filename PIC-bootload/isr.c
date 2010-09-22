@@ -22,7 +22,7 @@
  ********************************************************************/
 #include <p18cxxx.h>
 #include "usb.h"
-#include "BootPIC18NonJ.h"
+#include "Boot46J50Family.h"
 #include "io_cfg.h"
 
 void USBSubSystem(void);

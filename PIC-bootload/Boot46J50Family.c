@@ -132,6 +132,7 @@
 #include "typedefs.h"
 #include "usb.h"
 #include "io_cfg.h"             // I/O pin mapping
+#include "Boot46J50Family.h"
 
 
 typedef union 
@@ -413,7 +414,7 @@ void EraseFlash(void)
 void WriteFlashSubBlock(void)		//Use word writes to write code chunks less than a full 64 byte block size.
 {
 	unsigned char i = 0;
-	BYTE b;
+	BOOL b;
 
 	while(BufferedDataIndex > 0)		//While data is still in the buffer.
 	{
@@ -431,7 +432,7 @@ void WriteFlashSubBlock(void)		//Use word writes to write code chunks less than 
 		i++;
 		
 		EECON1 = 0b00100100;	//Word programming mode
-		b = INTCON;
+		b = INTCONbits.GIEH;
 		INTCONbits.GIEH = 0;		//Make certain interrupts disabled for unlock process.
 		_asm
 		MOVLW 0x55
@@ -442,7 +443,7 @@ void WriteFlashSubBlock(void)		//Use word writes to write code chunks less than 
 		_endasm		
 
 
-		INTCONbits.GIEH = b.b7;
+		INTCONbits.GIEH = b;
 		BufferedDataIndex = BufferedDataIndex - WORDSIZE;	//Used up one word from the buffer.
 	}
 	EECON1bits.WREN = 0;  //Good practice now to clear the WREN bit, as further protection against any accidental activation of self write/erase operations.
