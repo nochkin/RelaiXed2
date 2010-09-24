@@ -106,6 +106,7 @@ void USBCheckBusStatus(void)
      */
     if(usb_device_state == ATTACHED_STATE)
     {
+	    mLED_1_On();
         if(!UCONbits.SE0)
         {
             UIR = 0;                        // Clear all USB interrupts
@@ -139,7 +140,8 @@ void USBCheckBusStatus(void)
 void USBModuleEnable(void)
 {
     UCON = 0;
-    UIE = 0;                                // Mask all USB interrupts
+    UIE = 0xFF;                                // Mask all USB interrupts
+    UIEbits.ACTVIE = 1;
     UCONbits.USBEN = 1;                     // Enable module & attach to bus
     usb_device_state = ATTACHED_STATE;      // Defined in usbmmap.c & .h
 }//end USBModuleEnable
@@ -228,11 +230,12 @@ void USBDriverService(void)
      */
 
     if(UIRbits.ACTVIF && UIEbits.ACTVIE)    USBWakeFromSuspend();
-
+	mLED_2_On();
     /*
      * Pointless to continue servicing if the device is in suspend mode.
      */
     if(UCONbits.SUSPND==1) return;
+    mLED_3_On();
 
     /*
      * Task B: Service USB Bus Reset Interrupt.
@@ -256,7 +259,7 @@ void USBDriverService(void)
      * state and is ready for communication.
      */
     if(usb_device_state < DEFAULT_STATE) return;
-
+    mLED_6_On();
     /*
      * Task D: Servicing USB Transaction Complete Interrupt
      */
@@ -358,6 +361,7 @@ void USBSuspend(void)
      * switch to a slower clock, etc.
      */
 
+    mLED_5_On();
 	UIESave = UIE;		//Save UIE values, only want to wake on certain events
 	UIE = 0b00000100;	//Enabling the ACTVIF interrupt source only
 						//Since ACTVIF triggers on any bus activity, it will also trigger on USB reset events.
@@ -370,9 +374,9 @@ void USBSuspend(void)
 
 
 	//Configure I/O pins for lowest power.  This will be application specific.
-	LEDSave = mLED_1 | mLED_2;
-	mLED_1_Off();
-	mLED_2_Off();
+	//LEDSave = mLED_1 | mLED_2;
+	//mLED_1_Off();
+	//mLED_2_Off();
 
 	//Disable all microcontroller wake up sources, except for the one(s) which will
 	//be used to wake up the microcontroller.  At the very least, the USB activity
@@ -397,8 +401,8 @@ void USBSuspend(void)
     					//in the USB host software.
 
 	//Now restore states of I/O pins if desired/if it was changed prior to entering sleep
-	mLED_1 = LEDSave;
-	mLED_2 = LEDSave;
+	//mLED_1 = LEDSave;
+	//mLED_2 = LEDSave;
 
 	//Note: If using the two-speed startup feature, wakeup and execution will occur before the main oscillator + PLL
 	//has had a chance to start.  Device will run from INTOSC (no PLL).  However, USB module cannot be clocked
@@ -715,6 +719,7 @@ status stage.
  *****************************************************************************/
 void USBProtocolResetHandler(void)
 {
+	mLED_4_On();
     UEIR = 0;                       // Clear all USB error flags
     UIR = 0;                        // Clears all USB interrupts
     UEIE = 0b10011111;              // Unmask all USB error interrupts

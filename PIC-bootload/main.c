@@ -184,12 +184,10 @@ word led_count;
 unsigned int pll_startup_counter;	//Used for software delay while pll is starting up
 
 
-
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 static void InitializeSystem(void);
 void USBTasks(void);
 void BlinkUSBStatus(void);
-void Main(void);
 
 //externs
 extern void LongDelay(void);
@@ -200,7 +198,7 @@ extern void LongDelay(void);
 void main(void)
 {   
 	mInitAllLEDs();
-	
+
     InitializeSystem();
     USBTasks(); // check for first USB stuff
     
@@ -208,7 +206,6 @@ void main(void)
 	PIE2bits.USBIE  = 1; // allow USB interrupts
 	INTCONbits.GIEL = 1; // allow all low-priority interrupts (among which the USB interrupts)
 	INTCONbits.GIEH = 1; // also allow high-priority interrupts (prerequisite for low-priority ints)
-	mLED_1_On();
 	_asm
 		goto ProgramMemStart			// Assume the user app has its own main loop.
 	_endasm
@@ -241,6 +238,7 @@ static void InitializeSystem(void)
 	OSCCON = 0x60;	//Clock switch to primary clock source.  May not have been running
 					//from this if the bootloader is called from the application firmware.
 
+	
 	//On the PIC18F46J50 Family of USB microcontrollers, the PLL will not power up and be enabled
 	//by default, even if a PLL enabled oscillator configuration is selected (such as HS+PLL).
 	//This allows the device to power up at a lower initial operating frequency, which can be
@@ -340,11 +338,6 @@ static void InitializeSystem(void)
     UserInit();                     // See Boot46J50Family.c.  Initializes the bootloader firmware state machine variables.
 
 	led_count = 0;			//Initialize variable used to toggle LEDs
-    mInitAllLEDs();			//Init them off.
-
-	//setup Timer1: count Fosc/4 with pre=8: cnt rate = 48MHz/4/8=1.5MHz, wrap-aroud is 1.5M/64K = 22,888Hz
-    T1CON = 0x3d;
-
 }//end InitializeSystem
 
 /******************************************************************************
@@ -371,6 +364,8 @@ void USBTasks(void)
     {   USBCheckBusStatus();                    // Must use polling method
     } while (usb_device_state == 1);
     USBDriverService();              	    // Interrupt or polling method
+    TXADDRL = usb_device_state;	
+
 
 }// end USBTasks
 

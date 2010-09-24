@@ -12,6 +12,7 @@
 void app_isr_high(void);
 void app_isr_low(void);
 void app_main(void);
+void check_usb_power(void);
 
 #pragma code app_start=0x2000
 void app_start(void)
@@ -43,20 +44,32 @@ void app_main(void)
 	while(1)
 	{
 		for (i=0; i<64000U; i++)
-			;
+			UIE = 0x3F; // hack: reactivate most USB interrupts
 		mLED_7_Toggle();
+		check_usb_power();
 	}	
 }
+
+void check_usb_power(void)
+{
+	static BOOL prev_usb_bus_sense = 0;
+	
+	if (usb_bus_sense != prev_usb_bus_sense)
+	{
+		PIR2bits.USBIF = 1; // enter USB code through interrupt
+		prev_usb_bus_sense = usb_bus_sense;
+	}	
+}	
 
 // we do not expect to receive interrupts in this app...
 #pragma interruptlow app_isr_low
 void app_isr_low(void)
 {
-	     mLED_6_On();
+	     //mLED_7_On();
 }
 
 #pragma interrupt app_isr_high
 void app_isr_high(void)
 {
-	     mLED_6_On();
+	     //mLED_7_On();
 }
