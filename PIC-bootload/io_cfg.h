@@ -219,13 +219,13 @@
 #define mLED_6              TRISBbits.TRISB1
 #define mLED_7              TRISBbits.TRISB3
 
-#define mLED_1_On()         mLED_1 = 0;
-#define mLED_2_On()         mLED_2 = 0;
-#define mLED_3_On()         mLED_3 = 0;
-#define mLED_4_On()         mLED_4 = 0;
-#define mLED_5_On()         mLED_5 = 0;
-#define mLED_6_On()         mLED_6 = 0;
-#define mLED_7_On()         mLED_7 = 0;
+#define mLED_1_On()         {mLED_1 = 0; PORTBbits.RB2 = 0;}
+#define mLED_2_On()         {mLED_2 = 0; PORTBbits.RB0 = 0;}
+#define mLED_3_On()         {mLED_3 = 0; PORTCbits.RC1 = 0;}
+#define mLED_4_On()         {mLED_4 = 0; PORTCbits.RC0 = 0;}
+#define mLED_5_On()         {mLED_5 = 0; PORTCbits.RC2 = 0;}
+#define mLED_6_On()         {mLED_6 = 0; PORTBbits.RB1 = 0;}
+#define mLED_7_On()         {mLED_7 = 0; PORTBbits.RB3 = 0;}
 
 #define mLED_1_Off()        mLED_1 = 1;
 #define mLED_2_Off()        mLED_2 = 1;
@@ -235,13 +235,13 @@
 #define mLED_6_Off()        mLED_6 = 1;
 #define mLED_7_Off()        mLED_7 = 1;
 
-#define mLED_1_Toggle()     mLED_1 = !mLED_1;
-#define mLED_2_Toggle()     mLED_2 = !mLED_2;
-#define mLED_3_Toggle()     mLED_3 = !mLED_3;
-#define mLED_4_Toggle()     mLED_4 = !mLED_4;
-#define mLED_5_Toggle()     mLED_5 = !mLED_5;
-#define mLED_6_Toggle()     mLED_6 = !mLED_6;
-#define mLED_7_Toggle()     mLED_7 = !mLED_7;
+#define mLED_1_Toggle()     {mLED_1 = !mLED_1; PORTBbits.RB2 = 0;}
+#define mLED_2_Toggle()     {mLED_2 = !mLED_2; PORTBbits.RB0 = 0;}
+#define mLED_3_Toggle()     {mLED_3 = !mLED_3; PORTCbits.RC1 = 0;}
+#define mLED_4_Toggle()     {mLED_4 = !mLED_4; PORTCbits.RC0 = 0;}
+#define mLED_5_Toggle()     {mLED_5 = !mLED_5; PORTCbits.RC2 = 0;}
+#define mLED_6_Toggle()     {mLED_6 = !mLED_6; PORTBbits.RB1 = 0;}
+#define mLED_7_Toggle()     {mLED_7 = !mLED_7; PORTBbits.RB3 = 0;}
 
 #else
     #error Not a supported board (yet), add I/O pin mapping in __FILE__, line __LINE__

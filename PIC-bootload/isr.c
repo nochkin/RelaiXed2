@@ -88,8 +88,10 @@ void USBSubSystem(void)
 	else
 	{
 		UIE = 0x00; // disable all USB interrupts
-		// ? UIR = 0x00;
- 	}   	
+		UIEbits.ACTVIE = 1; // but allow wake-up
+		// UIR = 0x00;
+ 	}
+ 	TXADDRL = usb_device_state;	
 	PIE2bits.USBIE = 1; // restore
 
   	
