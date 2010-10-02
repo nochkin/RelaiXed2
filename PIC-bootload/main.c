@@ -197,12 +197,10 @@ extern void LongDelay(void);
 #pragma code
 void main(void)
 {   
-	mInitAllLEDs();
-
     InitializeSystem();
     USBTasks(); // check for first USB stuff
     
-    UIE = 0xff;          // allow USB interrupts
+    UIE = 0x3f;          // allow sensible USB interrupts
 	PIE2bits.USBIE  = 1; // allow USB interrupts
 	INTCONbits.GIEL = 1; // allow all low-priority interrupts (among which the USB interrupts)
 	INTCONbits.GIEH = 1; // also allow high-priority interrupts (prerequisite for low-priority ints)
@@ -261,6 +259,7 @@ static void InitializeSystem(void)
 		//to suppress the error message.
     #endif
 
+	mInitAllLEDs();
 
 	//USB module may have already been on if the application firmware calls the bootloader
 	//without first disabling the USB module.  If this happens, need
@@ -361,54 +360,12 @@ void USBTasks(void)
      * Servicing Hardware
      */
     do
-    {   USBCheckBusStatus();                    // Must use polling method
-    } while (usb_device_state == 1);
+    {   USBCheckBusStatus();                // Must use polling method
+    } while (usb_device_state == 1 && usb_bus_sense);
     USBDriverService();              	    // Interrupt or polling method
     TXADDRL = usb_device_state;	
 
 
 }// end USBTasks
-
-
-/******************************************************************************
- * Function:        void BlinkUSBStatus(void)
- *
- * PreCondition:    None
- *
- * Input:           None
- *
- * Output:          None
- *
- * Side Effects:    None
- *
- * Overview:        BlinkUSBStatus turns on and off LEDs corresponding to
- *                  the USB device state.
- *
- * Note:            mLED macros can be found in io_cfg.h
- *                  usb_device_state is declared in usbmmap.c and is modified
- *                  in usbdrv.c, usbctrltrf.c, and usb9.c
- *****************************************************************************/
-void BlinkUSBStatus(void)
-{
-    if(led_count == 0)led_count = 10000U;
-    led_count--;
-
-    #define mLED_Both_Off()         {mLED_1_Off();mLED_2_Off();}
-    #define mLED_Both_On()          {mLED_1_On();mLED_2_On();}
-    #define mLED_Only_1_On()        {mLED_1_On();mLED_2_Off();}
-    #define mLED_Only_2_On()        {mLED_1_Off();mLED_2_On();}
-
-	 if(usb_device_state < CONFIGURED_STATE)
-		mLED_Only_1_On();
-	 if(usb_device_state == CONFIGURED_STATE)
-        {
-            if(led_count==0)
-            {
-                mLED_1_Toggle();
-                mLED_2 = !mLED_1;       // Alternate blink
-            }//end if
-        }//end if(...)
-
-}//end BlinkUSBStatus
 
 /** EOF main.c ***************************************************************/

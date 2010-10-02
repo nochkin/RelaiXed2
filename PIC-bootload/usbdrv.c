@@ -106,7 +106,6 @@ void USBCheckBusStatus(void)
      */
     if(usb_device_state == ATTACHED_STATE)
     {
-	    mLED_1_On();
         if(!UCONbits.SE0)
         {
             UIR = 0;                        // Clear all USB interrupts
@@ -230,12 +229,10 @@ void USBDriverService(void)
      */
 
     if(UIRbits.ACTVIF && UIEbits.ACTVIE)    USBWakeFromSuspend();
-	mLED_2_On();
     /*
      * Pointless to continue servicing if the device is in suspend mode.
      */
     if(UCONbits.SUSPND==1) return;
-    mLED_3_On();
 
     /*
      * Task B: Service USB Bus Reset Interrupt.
@@ -259,7 +256,6 @@ void USBDriverService(void)
      * state and is ready for communication.
      */
     if(usb_device_state < DEFAULT_STATE) return;
-    mLED_6_On();
     /*
      * Task D: Servicing USB Transaction Complete Interrupt
      */
@@ -361,7 +357,6 @@ void USBSuspend(void)
      * switch to a slower clock, etc.
      */
 
-    mLED_5_On();
 	UIESave = UIE;		//Save UIE values, only want to wake on certain events
 	UIE = 0b00000100;	//Enabling the ACTVIF interrupt source only
 						//Since ACTVIF triggers on any bus activity, it will also trigger on USB reset events.
@@ -719,7 +714,6 @@ status stage.
  *****************************************************************************/
 void USBProtocolResetHandler(void)
 {
-	mLED_4_On();
     UEIR = 0;                       // Clear all USB error flags
     UIR = 0;                        // Clears all USB interrupts
     UEIE = 0b10011111;              // Unmask all USB error interrupts

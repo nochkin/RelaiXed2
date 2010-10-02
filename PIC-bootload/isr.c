@@ -51,9 +51,6 @@ void interrupt_at_low_vector(void)
 #pragma interruptlow BootLoadIsr
 void BootLoadIsr(void)
 {
-	//TODO: catch interrrupt-on-change on input port that senses Vbus (USB power)
-	//      see commentblock with 'InitializeSystem' in main.c
-	//      For now, selected RB5 for this function. (avoid RC0..5 and MSSP(I2C=RB4,6))
 	if (PIR2bits.USBIF && PIE2bits.USBIE)
 	{
 		USBSubSystem();
@@ -91,9 +88,9 @@ void USBSubSystem(void)
 		UIEbits.ACTVIE = 1; // but allow wake-up
 		// UIR = 0x00;
  	}
- 	TXADDRL = usb_device_state;	
+ 	TXADDRL = usb_device_state;	// JvE: HACK for observability
+	UIE = 0x3D;
 	PIE2bits.USBIE = 1; // restore
-
   	
 	if((usb_device_state == CONFIGURED_STATE) && (UCONbits.SUSPND != 1) &&
 		BootState == 0x00 && !mHIDRxIsBusy())

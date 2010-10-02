@@ -39,21 +39,37 @@ void app_interrupt_at_low_vector(void)
 void app_main(void)
 {
 	unsigned int i;
-    mLED_7_On();
+	byte j;
 
 	while(1)
 	{
 		for (i=0; i<64000U; i++)
-			UIE = 0x3F; // hack: reactivate most USB interrupts
-		mLED_7_Toggle();
+			;
+		j += 1;
+		if (j > 5) j = 0;
+		
+		switch (j)
+		{
+			case 0: mLED_6_On(); mLED_4_Off(); break;
+			case 1: mLED_1_On(); mLED_5_Off(); break;
+			case 2: mLED_2_On(); mLED_6_Off(); break;
+			case 3: mLED_3_On(); mLED_1_Off(); break;
+			case 4: mLED_4_On(); mLED_2_Off(); break;
+			case 5: mLED_5_On(); mLED_3_Off();
+		}	
 		check_usb_power();
-	}	
+	}
 }
 
 void check_usb_power(void)
 {
 	static BOOL prev_usb_bus_sense = 0;
 	
+	if (UCONbits.USBEN)
+		mLED_7_On()
+	else
+		mLED_7_Off()
+
 	if (usb_bus_sense != prev_usb_bus_sense)
 	{
 		PIR2bits.USBIF = 1; // enter USB code through interrupt
@@ -65,11 +81,9 @@ void check_usb_power(void)
 #pragma interruptlow app_isr_low
 void app_isr_low(void)
 {
-	     //mLED_7_On();
 }
 
 #pragma interrupt app_isr_high
 void app_isr_high(void)
 {
-	     //mLED_7_On();
 }
