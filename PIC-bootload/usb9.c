@@ -184,6 +184,9 @@ void USBStdSetCfgHandler(void)
     mDisableEP1to15();                          // See usbdrv.h
     ClearArray((byte*)&usb_alt_intf,MAX_NUM_INT);
     usb_active_cfg = SetupPkt.bCfgValue;
+    // usb_active_cfg = 1 when communicating with the PC bootloader app
+    // usb_active_cfg = 2 when communicating with the Relaixed IO app
+    // (value of 0 means not configured)
     if(SetupPkt.bCfgValue == 0)
         usb_device_state = ADDRESS_STATE;
     else
