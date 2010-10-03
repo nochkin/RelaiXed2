@@ -108,19 +108,19 @@
 /* HID macros */
 #define mUSBGetHIDDscAdr(ptr)               \
 {                                           \
-    if(usb_active_cfg == 1)                 \
+    if(usb_active_cfg == 1 || usb_active_cfg == 2) \
         ptr = (rom byte*)&cfg01.hid_i00a00; \
 }
 
 #define mUSBGetHIDRptDscAdr(ptr)            \
 {                                           \
-    if(usb_active_cfg == 1)                 \
+    if(usb_active_cfg == 1 || usb_active_cfg == 2)                 \
         ptr = (rom byte*)&hid_rpt01;        \
 }
 
 #define mUSBGetHIDRptDscSize(count)         \
 {                                           \
-    if(usb_active_cfg == 1)                 \
+    if(usb_active_cfg == 1 || usb_active_cfg == 2)                 \
         count = sizeof(hid_rpt01);          \
 }
 

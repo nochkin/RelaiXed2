@@ -28,6 +28,8 @@
 void USBSubSystem(void);
 void BootLoadIsr(void);
 
+extern byte usb_active_cfg;
+
 // high-priority interrupt vector:
 #pragma code high_vector=0x08
 void interrupt_at_high_vector(void)
@@ -93,10 +95,11 @@ void USBSubSystem(void)
 	PIE2bits.USBIE = 1; // restore
   	
 	if((usb_device_state == CONFIGURED_STATE) && (UCONbits.SUSPND != 1) &&
-		BootState == 0x00 && !mHIDRxIsBusy())
+		BootState == 0x00 && !mHIDRxIsBusy() && usb_active_cfg == 1)
 	{
 		// Enter here if there was data for the bootloader endpoint,
 		// AND we are not already in here with merely yet another interrupt
+		// usb_active_cfg == 1 means we have a connection with the PC bootload app.
 		
 		// Also this is not really in the style of an isr :-(
 		// We will not return to the user application anymore.

@@ -61,6 +61,7 @@
 /** E X T E R N S ***************************************************/
 extern rom USB_DEV_DSC device_dsc;
 extern CFG01;
+
 extern rom const unsigned char *rom USB_CD_Ptr[];
 extern rom const unsigned char *rom USB_SD_Ptr[];
 

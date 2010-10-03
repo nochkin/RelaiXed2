@@ -188,11 +188,11 @@ rom USB_DEV_DSC device_dsc=
     EP0_BUFF_SIZE,          // Max packet size for EP0, see usbcfg.h
     0x04D8,                 // Vendor ID: Microchip
     0x003C,                 // Product ID: HID Bootloader
-    0x0002,                 // Device release number in BCD format
+    0x0100,                 // Device release number in BCD format
     0x01,                   // Manufacturer string index
     0x02,                   // Product string index
     0x00,                   // Device serial number string index
-    0x01                    // Number of possible configurations
+    0x02                    // Number of possible configurations
 };
 
 /* Configuration 1 Descriptor */
@@ -231,6 +231,8 @@ CFG01={
     sizeof(USB_EP_DSC),DSC_EP,_EP01_IN,_INT,HID_INT_IN_EP_SIZE,0x01,
     sizeof(USB_EP_DSC),DSC_EP,_EP01_OUT,_INT,HID_INT_OUT_EP_SIZE,0x01
 };
+/* Configuration 2 Descriptor */
+/* is not explicitly specified, but is an implicit copy of CFG01 */
 
 rom struct{byte bLength;byte bDscType;word string[1];}sd000={
 sizeof(sd000),DSC_STR,0x0409};
@@ -240,10 +242,9 @@ sizeof(sd001),DSC_STR,
 'M','i','c','r','o','c','h','i','p',' ',
 'T','e','c','h','n','o','l','o','g','y',' ','I','n','c','.'};
 
-rom struct{byte bLength;byte bDscType;word string[18];}sd002={
+rom struct{byte bLength;byte bDscType;word string[9];}sd002={
 sizeof(sd002),DSC_STR,
-'H','I','D',' ','R','L','X',' ','B','o','o',
-'t','l','o','a','d','e','r'};
+'R','E','L','A','I','X','E','D','2'};
 
 rom struct{byte report[HID_RPT01_SIZE];}hid_rpt01={
 //	First byte is the "Item".  First byte's two LSbs are the number of data bytes that
@@ -270,8 +271,9 @@ rom struct{byte report[HID_RPT01_SIZE];}hid_rpt01={
 
 rom const unsigned char *rom USB_CD_Ptr[]=
 {
-    (rom const unsigned char *rom)&cfg01,
-    (rom const unsigned char *rom)&cfg01
+    (rom const unsigned char *rom)&cfg01, // Dummy placeholder for uncofigured state
+    (rom const unsigned char *rom)&cfg01, // Used for configuration 1
+    (rom const unsigned char *rom)&cfg01  // Configuration 2 is a copy of CFG 1
 };
 rom const unsigned char *rom USB_SD_Ptr[]=
 {
