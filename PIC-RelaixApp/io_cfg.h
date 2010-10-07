@@ -23,6 +23,8 @@
  * 1.0			 10/01/2010	Original Version.  
  ********************************************************************/
 
+#include <p18cxxx.h>
+
 // Note that I/O directions, to be set by *TRIS* bits,
 // are already initialized by the RelaiXed  bootloader.
 

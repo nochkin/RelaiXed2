@@ -26,12 +26,16 @@
 #include <p18cxxx.h>
 #include "typedefs.h"                   
 #include "io_cfg.h"
+#include "display.h"
 
+// Forward declarations
 void app_isr_high(void);
 void app_isr_low(void);
 void main(void);
 void check_usb_power(void);
 static void init(void);               
+
+// exported globals
 
 // JvE: pragmas for bootloader addressing made
 // according to MPASM&MPLINK manual, chapter 13.5
@@ -99,15 +103,22 @@ void check_usb_power(void)
 	}	
 }	
 
-// we do not expect to receive interrupts in this app...
+// Pick-up low-priority interrupts
 #pragma interruptlow app_isr_low
 void app_isr_low(void)
 {
+	if (PIE2bits.USBIE && PIR2bits.USBIF)
+	{
+		PIR2bits.USBIF = 0;
+	}	
 }
 
+// Pick-up high-priority interrupts
 #pragma interrupt app_isr_high
 void app_isr_high(void)
 {
+	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
+		display();
 }
 
 static void init(void)
@@ -126,5 +137,21 @@ static void init(void)
 	
 	// setup I2C peripheral
 	SSP1CON1 = 0x28; // enable I2C master mode
-	SSP1ADD = 0x63; // 100kHz bitrate from 40MHz system clock	
+	SSP1ADD = 0x63; // 100kHz bitrate from 40MHz system clock
+	
+	// Timer0 OK for use, 8-bit prescale, 8- or 16-bit counter, sets TMR0IF
+	// Timer1: enabling it locks pins RC0 and RC1 to a special-function input, cannot do that.
+	// Timer2: 4-prescale, 4-bit post-scale, 8-bit counter&comparator, sets TMR2IF
+	// Timer3: 3-bit prescale, 16-bit counter, allows cascading with TMR1 or TMR2, sets TMR1IF(!)
+	// Timer4: 4-bit prescale, 8-bit count&compare, 4=bit postscale, sets TMR4IF
+	
+	// setup Timer4 for display refresh: 2^16 downscale from Fosc/4 is 153Hz
+	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
+	IPR3bits.TMR4IP = 1; // high priority interrupt
+	PIE3bits.TMR4IE = 1;
+	
+	// Globally enable interrupts
+	RCONbits.IPEN = 1;
+	INTCONbits.GIEH = 1;
+	INTCONbits.GIEL = 1;
 }	
