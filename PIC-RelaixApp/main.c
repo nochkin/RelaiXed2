@@ -35,26 +35,34 @@ void main(void);
 void check_usb_power(void);
 static void init(void);               
 
-// exported globals
-
+#ifdef __DEBUG
+// Don't use my bootloader USB stack: the MPLAB debugger doesn't understand that.
+// This debug image can be uploaded by the debugger/programmer
+#define ISR_HI 0x0008
+#define ISR_LO 0x0018
+#else
+// Normal operation. Built hex image should be inserted by bootloader
+#define ISR_HI 0x2008
+#define ISR_LO 0x2018
 // JvE: pragmas for bootloader addressing made
 // according to MPASM&MPLINK manual, chapter 13.5
-
+// The 'reset' jumps into the real 'main', not a device init function.
 #pragma code app_start=0x2000
 void app_start(void)
 {
 	_asm goto main _endasm	
 }
+#endif
 
 // high-priority interrupt vector:
-#pragma code app_isr_hi=0x2008
+#pragma code app_isr_hi = ISR_HI
 void app_interrupt_at_high_vector(void)
 {
 	_asm goto app_isr_high _endasm	
 }
 
 // low-priority interrupt vector:
-#pragma code app_isr_lo=0x2018
+#pragma code app_isr_lo = ISR_LO
 void app_interrupt_at_low_vector(void)
 {
 	_asm goto app_isr_low _endasm
@@ -64,25 +72,20 @@ void app_interrupt_at_low_vector(void)
 void main(void)
 {
 	unsigned int i;
-	byte j;
 	
 	init();
 	
-	j = 0;
 	
 	while (1)
 	{
 		for (i=0; i<64000; i++)
 			;
-		if (++j > 2)
-			j = 0;
-			
-		switch (j)
-		{
-			case 0: mLED_1_On(); mLED_4_Off(); break;
-			case 1: mLED_7_On(); mLED_1_Off(); break;
-			case 2: mLED_4_On(); mLED_7_Off();
-		}	
+		
+		if (display_cnt < 0x80)
+			display_set( DIGIT_C, 0);
+		else
+		    display_set( DIGIT_minus, 1);
+
 		check_usb_power();
 	}
 }
@@ -91,11 +94,6 @@ void check_usb_power(void)
 {
 	static BOOL prev_usb_bus_sense = 0;
 	
-	if (UCONbits.USBEN)
-		mLED_2_On()
-	else
-		mLED_2_Off()
-
 	if (HasUSB != prev_usb_bus_sense)
 	{
 		PIR2bits.USBIF = 1; // enter USB code through interrupt
@@ -118,7 +116,7 @@ void app_isr_low(void)
 void app_isr_high(void)
 {
 	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
-		display();
+		display_isr();
 }
 
 static void init(void)
@@ -146,6 +144,7 @@ static void init(void)
 	// Timer4: 4-bit prescale, 8-bit count&compare, 4=bit postscale, sets TMR4IF
 	
 	// setup Timer4 for display refresh: 2^16 downscale from Fosc/4 is 153Hz
+	// hmm... measure as 2x91.5509 Hz
 	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
 	IPR3bits.TMR4IP = 1; // high priority interrupt
 	PIE3bits.TMR4IE = 1;
