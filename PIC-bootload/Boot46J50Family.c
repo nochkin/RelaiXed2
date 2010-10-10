@@ -223,20 +223,47 @@ void UserInit(void)
  * JvE: We enter this bootloadprocess from a USB interrupt.
  * Unlike a 'normal' ISR, we stay in here.
  * Stay in bootloader process while active with PC, then Reset.
- *****************************************************************************/
+ * We cannot allow to return-from-interrupt back into the bootloaded application
+ * (the relaixed code) because half-way this bootloader interaction that
+ * application program might be corrupt, like only partially uploaded or erased.
+ *****************************************************************************/ 
 void ProcessBootLoad(void)
 {
-	while (BootState != Idle || !mHIDRxIsBusy())
+	// Stop relaixed operation (such as timer interrupts)
+	//PIE1 = 0;
+	//PIE2 = 0;
+	//PIE3 = 0;
+	PIE3bits.TMR4IE = 0;
+	mInitAllLEDs();
+	mLED_1_On()
+	mLED_2_On()
+	mLED_5_On()
+	mLED_6_On()
+	mLED_7_On()
+	LEDright = 1;
+	UIE = 0x3D;
+	PIE2bits.USBIE = 1; // restore
+	
+	//while (usb_bus_sense && (BootState != Idle || !mHIDRxIsBusy()))
+	while (usb_bus_sense && UCONbits.USBEN) // leave only on a reset command
 	{
 		ProcessIO();
 
 		ClrWdt();
 		IPR2bits.USBIP = 0; // low priority
 		PIE2bits.USBIE = 1;
+		// Now re-enable the global interrupt-enable bit.
+		// Normally this is done by the return-from-interrupt instruction ONLY,
+		// but we want to prevent to go back to the bootloaded-application.
+		// Simply enabling it here, will cause the interrupt to fire again,
+		// and put this program context here in the isr saved environment.
+		INTCONbits.GIEL = 1;
 
-		Sleep(); // wait for interupt
+		//Sleep(); // wait for interupt
 	}
-	//Reset();
+	// USB cable to PC was detached, proceed with Reset to launch the application program
+	LongDelay();
+	Reset();
 	// Goto reset-address of newly loaded program: init its vars, reset its stack
 	// but keep the current state of my USB subsystem
 	// Hmm... the intended 'goto ProgramMemStart' does not work, it locks the USB line :-(
