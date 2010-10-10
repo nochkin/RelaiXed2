@@ -53,6 +53,7 @@ void interrupt_at_low_vector(void)
 #pragma interruptlow BootLoadIsr
 void BootLoadIsr(void)
 {
+	// The PIC hardware will clear the 'GIEL' bit upon entering this isr.
 	if (PIR2bits.USBIF && PIE2bits.USBIE)
 	{
 		USBSubSystem();
@@ -61,15 +62,16 @@ void BootLoadIsr(void)
 	{
     	_asm goto ProgramMemStart+0x0018 _endasm
     	// return-from-isr is done in application program
- 	}   
+ 	}
+ 	// The 'return from interruptlow' instruction will set the GIEL bit again
 }
 
 void USBSubSystem(void)
 {
 	extern unsigned char BootState;
 	
-	PIR2bits.USBIF = 0;        
 	PIE2bits.USBIE = 0;
+	PIR2bits.USBIF = 0;        
     // Hmm.. not nice :-(
     // The USBCheckBusStatus() requires polling during USB power-up.
     // Maybe this busy-wait is acceptable because USB-attach is rare, and we are in a low-priority isr.
