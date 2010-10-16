@@ -226,26 +226,20 @@ void UserInit(void)
  * We cannot allow to return-from-interrupt back into the bootloaded application
  * (the relaixed code) because half-way this bootloader interaction that
  * application program might be corrupt, like only partially uploaded or erased.
- *****************************************************************************/ 
+ *****************************************************************************/
+static byte stay_in_bootload = 0;
 void ProcessBootLoad(void)
 {
+	byte PIE3_cpy = PIE3;
 	// Stop relaixed operation (such as timer interrupts)
 	//PIE1 = 0;
 	//PIE2 = 0;
-	//PIE3 = 0;
-	PIE3bits.TMR4IE = 0;
-	mInitAllLEDs();
-	mLED_1_On()
-	mLED_2_On()
-	mLED_5_On()
-	mLED_6_On()
-	mLED_7_On()
-	LEDright = 1;
+	PIE3 = 0;
 	UIE = 0x3D;
 	PIE2bits.USBIE = 1; // restore
 	
-	//while (usb_bus_sense && (BootState != Idle || !mHIDRxIsBusy()))
-	while (usb_bus_sense && UCONbits.USBEN) // leave only on a reset command
+	//while (usb_bus_sense && UCONbits.USBEN) // leave only on a reset command
+	do
 	{
 		ProcessIO();
 
@@ -257,13 +251,29 @@ void ProcessBootLoad(void)
 		// but we want to prevent to go back to the bootloaded-application.
 		// Simply enabling it here, will cause the interrupt to fire again,
 		// and put this program context here in the isr saved environment.
-		INTCONbits.GIEL = 1;
+		if (stay_in_bootload)
+		{
+			LEDright = 0;
+			mLED_1_On()
+			mLED_2_On()
+			mLED_3_Off()
+			mLED_4_Off()
+			mLED_5_On()
+			mLED_6_On()
+			mLED_7_On()
+			INTCONbits.GIEL = 1;
+		}	
 
 		//Sleep(); // wait for interupt
 	}
+	while (usb_bus_sense && (BootState != Idle || !mHIDRxIsBusy() || stay_in_bootload));
 	// USB cable to PC was detached, proceed with Reset to launch the application program
-	LongDelay();
-	Reset();
+	if (stay_in_bootload)
+	{
+		LongDelay();
+		Reset();
+	}
+	PIE3 = PIE3_cpy;
 	// Goto reset-address of newly loaded program: init its vars, reset its stack
 	// but keep the current state of my USB subsystem
 	// Hmm... the intended 'goto ProgramMemStart' does not work, it locks the USB line :-(
@@ -328,6 +338,7 @@ void ProcessIO(void)
 				break;
 			case ERASE_DEVICE:
 			{
+				stay_in_bootload = 1;
 				for(ErasePageTracker = StartPageToErase; ErasePageTracker < (MaxPageToErase + 1); ErasePageTracker++)
 				{
 					ClrWdt();
@@ -339,6 +350,7 @@ void ProcessIO(void)
 				break;
 			case PROGRAM_DEVICE:
 			{
+				stay_in_bootload = 1;
 				if(ProgrammedPointer == (unsigned short long)InvalidAddress)
 					ProgrammedPointer = PacketFromPC.Address;
 				
