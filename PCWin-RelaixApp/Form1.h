@@ -58,6 +58,7 @@
 #define PROGRAM_COMPLETE			0x06
 #define GET_DATA					0x07
 #define RESET_DEVICE				0x08
+#define LOG_DEVICE				    0x09
 #define GET_ENCRYPTED_FF			0xFF
 //**************************************************************************
 
@@ -92,6 +93,12 @@
 #define ERASE_POST_QUERY_SUCCESS	0x07
 //**************************************************************************
 
+//*********************** LOGGING RESULTS ************************************
+#define LOG_IDLE                    0xFF
+#define LOG_RUNNING                 0x00
+#define LOG_SUCCESS				    0x01
+#define LOG_WRITE_FILE_FAILED		0x02
+
 //*********************** VERIFY RESULTS ***********************************
 #define VERIFY_IDLE					0xFF
 #define VERIFY_RUNNING				0x00
@@ -125,6 +132,7 @@
 #define BOOTLOADER_READ				0x04
 #define BOOTLOADER_UNLOCK_CONFIG	0x05
 #define BOOTLOADER_RESET			0x06
+#define BOOTLOADER_LOG              0x07
 //**************************************************************************
 
 //*********************** RESET RESULTS ************************************
@@ -232,6 +240,12 @@ typedef union _BOOTLOADER_COMMAND
 		unsigned char Command;
 		unsigned char Pad[63];
 	}EraseDevice;
+	struct
+	{
+		unsigned char WindowsReserved;
+		unsigned char Command;
+		unsigned char Pad[63];
+	}LogDevice;
 	struct
 	{
 		unsigned char WindowsReserved;
@@ -409,7 +423,7 @@ namespace HIDBootLoader {
 		#pragma region Form1 Variables
 		Thread^ ReadThread;
 		Thread^ ProgramThread;
-		Thread^ EraseThread;
+		Thread^ LogThread;
 		Thread^ QueryThread;
 		Thread^ VerifyThread;
 		Thread^ UnlockConfigThread;
@@ -418,6 +432,7 @@ namespace HIDBootLoader {
 		unsigned char QueryThreadResults;
 		unsigned char ProgramThreadResults;
 		unsigned char EraseThreadResults;
+		unsigned char LogThreadResults;
 		unsigned char VerifyThreadResults;
 		unsigned char ReadThreadResults;
 		unsigned char UnlockConfigThreadResults;
@@ -430,7 +445,7 @@ namespace HIDBootLoader {
 		bool  btn_ProgramVerify_restore;
 		bool  btn_OpenHexFile_restore;
 		bool  btn_ExportHex_restore;
-		bool  btn_EraseDevice_restore;
+		bool  btn_LogDevice_restore;
 		bool  btn_ReadDevice_restore;
 		bool  ckbox_ConfigWordProgramming_restore;
 
@@ -462,7 +477,7 @@ namespace HIDBootLoader {
 		private: System::Windows::Forms::Button^  btn_ProgramVerify;
 		private: System::Windows::Forms::Button^  btn_OpenHexFile;
 		private: System::Windows::Forms::Button^  btn_ExportHex;
-		private: System::Windows::Forms::Button^  btn_EraseDevice;
+		private: System::Windows::Forms::Button^  btn_LogDevice;
 		private: System::Windows::Forms::Button^  btn_ReadDevice;
 
 		private: System::Windows::Forms::SaveFileDialog^  dialog_ExportHex;
@@ -470,8 +485,8 @@ namespace HIDBootLoader {
 		private: System::Windows::Forms::CheckBox^  ckbox_ConfigWordProgramming;
 		private: System::Windows::Forms::ProgressBar^  progressBar_Status;
 		private: System::ComponentModel::IContainer^  components;
-	private: System::Windows::Forms::Button^  btn_ClearListbox;
-	private: System::Windows::Forms::Timer^  tmr_ThreadStatus;
+	    private: System::Windows::Forms::Button^  btn_ClearListbox;
+	    private: System::Windows::Forms::Timer^  tmr_ThreadStatus;
 		#pragma endregion
 
 		#pragma region Constructor Functions
@@ -487,7 +502,7 @@ namespace HIDBootLoader {
 			btn_ProgramVerify_restore = btn_ProgramVerify->Enabled;
 			btn_OpenHexFile_restore = btn_OpenHexFile->Enabled;
 			btn_ExportHex_restore = btn_ExportHex->Enabled;
-			btn_EraseDevice_restore = btn_EraseDevice->Enabled;
+			btn_LogDevice_restore = btn_LogDevice->Enabled;
 			btn_ReadDevice_restore = btn_ReadDevice->Enabled;
 			ckbox_ConfigWordProgramming_restore = ckbox_ConfigWordProgramming->Enabled;
 
@@ -635,7 +650,7 @@ namespace HIDBootLoader {
 			this->btn_ReadDevice = (gcnew System::Windows::Forms::Button());
 			this->ckbox_ConfigWordProgramming = (gcnew System::Windows::Forms::CheckBox());
 			this->btn_ExportHex = (gcnew System::Windows::Forms::Button());
-			this->btn_EraseDevice = (gcnew System::Windows::Forms::Button());
+			this->btn_LogDevice = (gcnew System::Windows::Forms::Button());
 			this->progressBar_Status = (gcnew System::Windows::Forms::ProgressBar());
 			this->tmr_ThreadStatus = (gcnew System::Windows::Forms::Timer(this->components));
 			this->btn_Verify = (gcnew System::Windows::Forms::Button());
@@ -713,16 +728,17 @@ namespace HIDBootLoader {
 			this->btn_ExportHex->UseVisualStyleBackColor = true;
 			this->btn_ExportHex->Click += gcnew System::EventHandler(this, &Form1::btn_ExportHex_Click);
 			// 
+			// JvE 20101016: replace 'erase device' functionality with 'device log' functionality
 			// btn_EraseDevice
 			// 
-			this->btn_EraseDevice->Enabled = false;
-			this->btn_EraseDevice->Location = System::Drawing::Point(130, 11);
-			this->btn_EraseDevice->Name = L"btn_EraseDevice";
-			this->btn_EraseDevice->Size = System::Drawing::Size(108, 24);
-			this->btn_EraseDevice->TabIndex = 28;
-			this->btn_EraseDevice->Text = L"Erase Device";
-			this->btn_EraseDevice->UseVisualStyleBackColor = true;
-			this->btn_EraseDevice->Click += gcnew System::EventHandler(this, &Form1::btn_EraseDevice_Click);
+			this->btn_LogDevice->Enabled = false;
+			this->btn_LogDevice->Location = System::Drawing::Point(130, 11);
+			this->btn_LogDevice->Name = L"btn_LogDevice";
+			this->btn_LogDevice->Size = System::Drawing::Size(108, 24);
+			this->btn_LogDevice->TabIndex = 28;
+			this->btn_LogDevice->Text = L"Log Device";
+			this->btn_LogDevice->UseVisualStyleBackColor = true;
+			this->btn_LogDevice->Click += gcnew System::EventHandler(this, &Form1::btn_LogDevice_Click);
 			// 
 			// progressBar_Status
 			// 
@@ -790,14 +806,14 @@ namespace HIDBootLoader {
 			// 
 			// btn_ClearListbox
 			// 
-			this->btn_ClearListbox->Enabled = false;
+			this->btn_ClearListbox->Enabled = true;
 			this->btn_ClearListbox->Location = System::Drawing::Point(480, 11);
 			this->btn_ClearListbox->Name = L"btn_ClearListbox";
 			this->btn_ClearListbox->Size = System::Drawing::Size(107, 24);
 			this->btn_ClearListbox->TabIndex = 36;
 			this->btn_ClearListbox->Text = L"Clear Listbox";
 			this->btn_ClearListbox->UseVisualStyleBackColor = true;
-			this->btn_ClearListbox->Visible = false;
+			this->btn_ClearListbox->Visible = true;
 			this->btn_ClearListbox->Click += gcnew System::EventHandler(this, &Form1::btn_ClearListbox_Click);
 			// 
 			// Form1
@@ -811,7 +827,7 @@ namespace HIDBootLoader {
 			this->Controls->Add(this->btn_ResetDevice);
 			this->Controls->Add(this->btn_Verify);
 			this->Controls->Add(this->progressBar_Status);
-			this->Controls->Add(this->btn_EraseDevice);
+			this->Controls->Add(this->btn_LogDevice);
 			this->Controls->Add(this->btn_ExportHex);
 			this->Controls->Add(this->ckbox_ConfigWordProgramming);
 			this->Controls->Add(this->btn_ReadDevice);
@@ -1088,14 +1104,14 @@ namespace HIDBootLoader {
 
 		#pragma endregion
 
-		#pragma region Erase Functions
+		#pragma region Log Functions
 		/****************************************************************************
 			Function:
-				btn_EraseDevice_Click
+				btn_LogDevice_Click
 
 			Description:
-				This function is called when the erase button is clicked.  An erase
-				thread is is created.
+				This function is called when the logging button is clicked.  A Logging
+				thread is created.
 
 			Precondition:
 				Device must be attached
@@ -1114,33 +1130,57 @@ namespace HIDBootLoader {
 			Remarks:
 				None
 		***************************************************************************/
-		private: System::Void btn_EraseDevice_Click(System::Object^  sender, System::EventArgs^  e) 
+		private: System::Void btn_LogDevice_Click(System::Object^  sender, System::EventArgs^  e) 
 		{
-			DEBUG_OUT(">>btn_EraseDevice pressed");
+			DEBUG_OUT(">>btn_LogDevice pressed");
 
+			if (bootloaderState == BOOTLOADER_LOG)
+			{
+				// logging mode already active, pressing this btn requests to stop logging
+				if (LogThread)
+				{
+					LogThread->Abort();
+					delete LogThread;
+				}
+
+				ENABLE_PRINT();
+				PRINT_STATUS("Stop Logging");
+				//CloseHandle(ReadHandleToMyDevice);
+				//CloseHandle(WriteHandleToMyDevice);
+
+				this->btn_LogDevice->Text = L"Log Device";
+				bootloaderState = BOOTLOADER_IDLE;
+			    LogThreadResults = LOG_IDLE;
+				EnableButtons();
+				return;
+			}
+
+			// else: start logging mode
 			DisableButtons();
+			this->btn_LogDevice->Text = L"Stop Logging";
+			btn_LogDevice->Enabled = true;
 
 			//update the state of the booloader state machine to reflect
-			//  that we are starting an erase cycle
-			bootloaderState = BOOTLOADER_ERASE;
-			EraseThreadResults = ERASE_RUNNING;
+			//  that we are starting logging modus
+			bootloaderState = BOOTLOADER_LOG;
+			LogThreadResults = LOG_RUNNING;
 
-			//If an erase thread already exists
-			if(EraseThread)
+			/*If a logging thread already exists
+			if(LogThread)
 			{
 				//If it is still running
-				if(EraseThread->IsAlive)
+				if(LogThread->IsAlive)
 				{
 					//Then we don't want to create a new one.  Only one instance
 					//  of this thread should be running at any point of time
-					DEBUG_OUT("Erase thread already running");
+					DEBUG_OUT("Logging thread already running");
 					return;
 				}
 
 				//if there is a thread but it isn't running then destroy the old
 				//  one so we can make a new one.
-				delete EraseThread;
-			}
+				delete LogThread;
+			}*/
 
 			//If we are in not in debugging mode then clear the status box
 			#if !defined(DEBUGGING)
@@ -1149,29 +1189,33 @@ namespace HIDBootLoader {
 
 			//Enable the main state machine to print out a new status
 			ENABLE_PRINT();
-			PRINT_STATUS("Erasing Device (no status update until complete, may take several seconds)");
+			PRINT_STATUS("Logging Device");
 
 			#if defined(DEBUG_THREADS)
-				//If we are debugging then run the erase function inline
+				//If we are debugging then run the logging function inline
 				//  instead of in a thread so that we can print to the
 				//  window.
-				EraseThreadStart();
+				LogThreadStart();
 			#else
-				//If we are not in debugging mode then run the erase 
+				//If we are not in debugging mode then run the logging
 				//  function as a separete thread so that the user form
-				//  is still responsive while the erase function is taking
+				//  is still responsive while the logging function is taking
 				//  place
-				EraseThread = gcnew Thread(gcnew ThreadStart(this,&HIDBootLoader::Form1::EraseThreadStart));
-				EraseThread->Start();
+				if (!LogThread)
+				{
+					LogThread = gcnew Thread(gcnew ThreadStart(this,&HIDBootLoader::Form1::LogThreadStart));
+
+					LogThread->Start();
+				}
 			#endif
 		}
 
 		/****************************************************************************
 			Function:
-				EraseThreadStart
+				LogThreadStart
 
 			Description:
-				This function starts a new thread that erases the attached device.  
+				This function starts a new thread for logging the attached device.  
 
 			Precondition:
 				Device must be attached
@@ -1183,21 +1227,24 @@ namespace HIDBootLoader {
 				None 
 
 			Other:
-				EraseThreadResults should be set to ERASE_RUNNING before calling
+				LogThreadResults should be set to LOG_RUNNING before calling
 				this function or creating a thread that uses this function.  The
-				EraseThreadResults variable is modified to show the results of
+				LogThreadResults variable is modified to show the results of
 				the operation.
 
 			Remarks:
 				Caution should be used to only have a single instance of this 
 				thread running at any given point of time.
 		***************************************************************************/
-		private: System::Void EraseThreadStart(void)
+		private: System::Void LogThreadStart(void)
 		{
 			BOOTLOADER_COMMAND myCommand = {0};
+			BOOTLOADER_COMMAND myResponse = {0};
 			DWORD BytesWritten = 0;
+			DWORD BytesReceived = 0;
 			DWORD ErrorStatus = ERROR_SUCCESS; 
 
+			HANDLE ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
 			HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			//Create a new write handle to the device
@@ -1205,15 +1252,15 @@ namespace HIDBootLoader {
 			ErrorStatusWrite = GetLastError();
 			if(ErrorStatusWrite != ERROR_SUCCESS)
 			{
-				EraseThreadResults = ERASE_WRITE_FILE_FAILED;
+				LogThreadResults = LOG_WRITE_FILE_FAILED;
 				return;
 			}
 
 			//Create the command packet that we want to send to the device.  The
-			//  Command should be erase and the WindowsReserved byte should be
+			//  Command should be logging and the WindowsReserved byte should be
 			//  always set to 0.
-			myCommand.EraseDevice.WindowsReserved = 0;
-			myCommand.EraseDevice.Command = ERASE_DEVICE;
+			myCommand.LogDevice.WindowsReserved = 0;
+			myCommand.LogDevice.Command = LOG_DEVICE;
 
 			//Send the command to the device
 			WriteFile(WriteHandleToMyDevice,myCommand.RawData, 65, &BytesWritten, 0);	
@@ -1222,13 +1269,32 @@ namespace HIDBootLoader {
 			ErrorStatus = GetLastError();
 			if(ErrorStatus == ERROR_SUCCESS)
 			{
-				EraseThreadResults = ERASE_SUCCESS;
+				LogThreadResults = LOG_SUCCESS;
 			}
 			else
 			{
-				EraseThreadResults = ERASE_WRITE_FILE_FAILED;
+				LogThreadResults = LOG_WRITE_FILE_FAILED;
+				CloseHandle(WriteHandleToMyDevice);
+				return;
 			}
+			
+			//Try to read a packet from the device
+			ReadHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
+			while(1)
+			{
+				ReadFile(ReadHandleToMyDevice, myResponse.RawData, 65, &BytesReceived, 0);	//Shouldn't really do this.  Becomes infinite blocking function if it can't successfully write, for example, because the USB firmware on the microcontroller never sets the UOWN bit for the OUT endpoint.
+				//Get the status of the read request
+				ErrorStatus = GetLastError();
+				if(ErrorStatus != ERROR_SUCCESS)
+					break;
 
+				//If we were able to successfully read from the device
+				printBuffer(myResponse.PacketData.Data,BytesReceived);
+
+				Sleep(0);	//Relinquish current CPU time slice to provide fair CPU sharing, 
+						    //but don't actually sleep the thread to avoid losing potential performance.
+			}
+			CloseHandle(ReadHandleToMyDevice);
 			CloseHandle(WriteHandleToMyDevice);
 		}
 		#pragma endregion
@@ -1264,11 +1330,9 @@ namespace HIDBootLoader {
 
 			if(ckbox_ConfigWordProgramming->Checked)
 			{
-				btn_EraseDevice_restore = false;
+				btn_LogDevice_restore = false;
 				ENABLE_PRINT();
-				PRINT_STATUS("Disabling Erase button to prevent accidental erasing of the configuration words");
-				ENABLE_PRINT();
-				PRINT_STATUS("     without reprogramming them");
+				PRINT_STATUS("Disabling Logging functionality");
 			}
 
 			//Check to see if there is already an instance of a thread
@@ -3107,7 +3171,7 @@ namespace HIDBootLoader {
 					btn_ProgramVerify_restore = true;
 					if(ckbox_ConfigWordProgramming->Checked == FALSE)
 					{
-						btn_EraseDevice_restore = true;
+						btn_LogDevice_restore = true;
 					}
 					btn_ExportHex_restore = true;
 					btn_Verify_restore = true;
@@ -4308,7 +4372,7 @@ namespace HIDBootLoader {
 				  btn_ExportHex_restore = false;
 				  btn_ProgramVerify_restore = false;
 				  btn_ReadDevice_restore = false;
-				  btn_EraseDevice_restore = false;
+				  btn_LogDevice_restore = false;
 				  btn_Verify_restore = false;
 				  btn_ResetDevice_restore = false;
 				  ckbox_ConfigWordProgramming->Checked = false;
@@ -4318,7 +4382,7 @@ namespace HIDBootLoader {
 				  btn_ExportHex_restore = true;
 				  btn_ProgramVerify_restore = true;
 				  btn_ReadDevice_restore = true;
-				  btn_EraseDevice_restore = true;
+				  btn_LogDevice_restore = true;
 				  btn_Verify_restore = true;
 				  btn_ResetDevice_restore = true;
 				  ckbox_ConfigWordProgramming_restore = true;
@@ -4405,7 +4469,7 @@ namespace HIDBootLoader {
 			ENABLE_PRINT();
 
 			#if defined(DEBUG_THREADS)
-				//If we are debugging then run the erase function inline
+				//If we are debugging then run the logging function inline
 				//  instead of in a thread so that we can print to the
 				//  window.
 				ResetThreadStart();
@@ -4907,6 +4971,26 @@ namespace HIDBootLoader {
 					break;
 
 				/*****************************************************/
+				/*************** BOOTLOADER LOGGING ******************/
+				/*****************************************************/
+				case BOOTLOADER_LOG:
+					//Check the status of the logging thread
+					switch(LogThreadResults)
+					{
+						case LOG_RUNNING:
+							//If it is running then let the user know
+							PRINT_STATUS("Logging running");
+							break;
+
+						case LOG_SUCCESS:
+						default:
+							//If we got into some unknown state then return to idle
+							bootloaderState = BOOTLOADER_IDLE;
+							LogThreadResults = LOG_IDLE;
+							break;
+					}
+					break;
+				/*****************************************************/
 				/*************** BOOTLOADER ERASE ********************/
 				/*****************************************************/
 				case BOOTLOADER_ERASE:
@@ -5045,12 +5129,7 @@ namespace HIDBootLoader {
 							btn_OpenHexFile_restore = true;
 							btn_ReadDevice_restore = true;
 							btn_ResetDevice_restore = true;
-
-							btn_EraseDevice_restore = true;
-							if(ckbox_ConfigWordProgramming->Checked)
-							{
-								btn_EraseDevice_restore = false;
-							}
+							btn_LogDevice_restore = true;
 
 							//initialize a variable to keep track if we were
 							//  able to allocate memory for each of the specified
@@ -5363,8 +5442,11 @@ namespace HIDBootLoader {
 			btn_ProgramVerify_restore = btn_ProgramVerify->Enabled;
 			btn_OpenHexFile_restore = btn_OpenHexFile->Enabled;
 			btn_ExportHex_restore = btn_ExportHex->Enabled;
-			btn_EraseDevice_restore = btn_EraseDevice->Enabled;
+			btn_LogDevice_restore = btn_LogDevice->Enabled;
 			btn_ReadDevice_restore = btn_ReadDevice->Enabled;
+	        btn_DumpMemory_restore = btn_DumpMemory->Enabled;
+			btn_Query_restore = btn_Query->Enabled;
+
 
 			#if defined(ENCRYPTED_BOOTLOADER)
 				ckbox_ConfigWordProgramming_restore = ckbox_ConfigWordProgramming->Enabled;
@@ -5376,9 +5458,11 @@ namespace HIDBootLoader {
 			btn_ProgramVerify->Enabled = false;
 			btn_OpenHexFile->Enabled = false;
 			btn_ExportHex->Enabled = false;
-			btn_EraseDevice->Enabled = false;
+			btn_LogDevice->Enabled = false;
 			btn_ReadDevice->Enabled = false;
 			ckbox_ConfigWordProgramming->Enabled = false;
+	        btn_DumpMemory->Enabled = false;
+			btn_Query->Enabled = false;
 		}
 
 		/****************************************************************************
@@ -5419,8 +5503,10 @@ namespace HIDBootLoader {
 			btn_ProgramVerify->Enabled = btn_ProgramVerify_restore;
 			btn_OpenHexFile->Enabled = btn_OpenHexFile_restore;
 			btn_ExportHex->Enabled = btn_ExportHex_restore;
-			btn_EraseDevice->Enabled = btn_EraseDevice_restore;
+			btn_LogDevice->Enabled = btn_LogDevice_restore;
 			btn_ReadDevice->Enabled = btn_ReadDevice_restore;
+	        btn_DumpMemory->Enabled = btn_DumpMemory_restore;
+			btn_Query->Enabled = btn_Query_restore;
 			#if !defined(ENCRYPTED_BOOTLOADER)
 				ckbox_ConfigWordProgramming->Enabled = ckbox_ConfigWordProgramming_restore;
 			#endif
