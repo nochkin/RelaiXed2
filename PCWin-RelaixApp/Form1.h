@@ -97,7 +97,7 @@
 #define LOG_IDLE                    0xFF
 #define LOG_RUNNING                 0x00
 #define LOG_SUCCESS				    0x01
-#define LOG_WRITE_FILE_FAILED		0x02
+#define LOG_FAILED		            0x02
 
 //*********************** VERIFY RESULTS ***********************************
 #define VERIFY_IDLE					0xFF
@@ -174,7 +174,7 @@
 
 #define DEBUGGING
 //#define DEBUG_BUTTONS
-#define DEBUG_THREADS
+//#define DEBUG_THREADS
 //#define DEBUG_USB
 
 #define DONT_VERIFY_NONPROGRAMMED_ADDRESSES
@@ -1252,7 +1252,7 @@ namespace HIDBootLoader {
 			ErrorStatusWrite = GetLastError();
 			if(ErrorStatusWrite != ERROR_SUCCESS)
 			{
-				LogThreadResults = LOG_WRITE_FILE_FAILED;
+				LogThreadResults = LOG_FAILED;
 				return;
 			}
 
@@ -1269,11 +1269,11 @@ namespace HIDBootLoader {
 			ErrorStatus = GetLastError();
 			if(ErrorStatus == ERROR_SUCCESS)
 			{
-				LogThreadResults = LOG_SUCCESS;
+				LogThreadResults = LOG_RUNNING;
 			}
 			else
 			{
-				LogThreadResults = LOG_WRITE_FILE_FAILED;
+				LogThreadResults = LOG_FAILED;
 				CloseHandle(WriteHandleToMyDevice);
 				return;
 			}
@@ -1296,6 +1296,7 @@ namespace HIDBootLoader {
 			}
 			CloseHandle(ReadHandleToMyDevice);
 			CloseHandle(WriteHandleToMyDevice);
+			LogThreadResults = (ErrorStatus == ERROR_SUCCESS) ? LOG_SUCCESS : LOG_FAILED;
 		}
 		#pragma endregion
 
@@ -4978,10 +4979,12 @@ namespace HIDBootLoader {
 					switch(LogThreadResults)
 					{
 						case LOG_RUNNING:
-							//If it is running then let the user know
-							PRINT_STATUS("Logging running");
+							// OK, busy
 							break;
 
+						case LOG_FAILED:
+							//If it is running then let the user know
+							PRINT_STATUS("Logging I/O failure");
 						case LOG_SUCCESS:
 						default:
 							//If we got into some unknown state then return to idle
