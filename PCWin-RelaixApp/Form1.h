@@ -181,7 +181,7 @@
 //#define ENCRYPTED_BOOTLOADER
 
 #if defined(DEBUGGING)
-#define DEBUG_OUT(s) {tmr_ThreadStatus->Enabled = false;listBox1->Items->Add(s);listBox1->SelectedIndex = listBox1->Items->Count - 1;tmr_ThreadStatus->Enabled = true;}
+	#define DEBUG_OUT(s) {tmr_ThreadStatus->Enabled = false;listBox1->Items->Add(s);listBox1->SelectedIndex = listBox1->Items->Count - 1;tmr_ThreadStatus->Enabled = true;}
 	#define DEBUG_PRINT_BUFFER(buffer,size) printBuffer(buffer,size)
 #else
 	#define DEBUG_OUT(s)
@@ -244,7 +244,8 @@ typedef union _BOOTLOADER_COMMAND
 	{
 		unsigned char WindowsReserved;
 		unsigned char Command;
-		unsigned char Pad[63];
+		unsigned char Level;
+		unsigned char Pad[62];
 	}LogDevice;
 	struct
 	{
@@ -423,7 +424,6 @@ namespace HIDBootLoader {
 		#pragma region Form1 Variables
 		Thread^ ReadThread;
 		Thread^ ProgramThread;
-		Thread^ LogThread;
 		Thread^ QueryThread;
 		Thread^ VerifyThread;
 		Thread^ UnlockConfigThread;
@@ -461,6 +461,12 @@ namespace HIDBootLoader {
 		unsigned char memoryRegionsDetected;
 		bool inTimer;
 		bool deviceAttached;
+		
+		// JvE: made these Read/Write handles into class variables,
+		// becayse I want to access the ReadHandle in the threadstatus_tick thread
+		// for logging purpose.
+		HANDLE WriteHandleToMyDevice;
+		HANDLE ReadHandleToMyDevice;
 
 		unsigned char *pData;
 		unsigned char *pData0;
@@ -562,8 +568,8 @@ namespace HIDBootLoader {
 			Status = TryToFindHIDDeviceFromVIDPID();
 			if(Status == TRUE)
 			{
-				HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
-				HANDLE ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
+				WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
+				ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 				//Open read and write pipes to the device.
 				WriteHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
@@ -881,8 +887,8 @@ namespace HIDBootLoader {
 			DWORD ErrorStatus = ERROR_SUCCESS; 
 			DWORD BytesReceived = 0;
 
-			HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
-			HANDLE ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
+			WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
+			ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			memoryRegionsDetected = 0;
 
@@ -1133,20 +1139,25 @@ namespace HIDBootLoader {
 		private: System::Void btn_LogDevice_Click(System::Object^  sender, System::EventArgs^  e) 
 		{
 			DEBUG_OUT(">>btn_LogDevice pressed");
+			DWORD BytesWritten = 0;
+			BOOTLOADER_COMMAND myCommand = {0};
+			DWORD ErrorStatus = ERROR_SUCCESS;
 
 			if (bootloaderState == BOOTLOADER_LOG)
 			{
-				// logging mode already active, pressing this btn requests to stop logging
-				if (LogThread)
-				{
-					LogThread->Abort();
-					delete LogThread;
-				}
+				DEBUG_OUT("Stop Logging");
+				//Create the command packet to stop logging by the device.  The
+				//  Command should be logging and the WindowsReserved byte should be
+				//  always set to 0.
+				myCommand.LogDevice.WindowsReserved = 0;
+				myCommand.LogDevice.Command = LOG_DEVICE;
+				myCommand.LogDevice.Level = 0;
 
-				ENABLE_PRINT();
-				PRINT_STATUS("Stop Logging");
-				//CloseHandle(ReadHandleToMyDevice);
-				//CloseHandle(WriteHandleToMyDevice);
+				//Send the command to the device
+				WriteFile(WriteHandleToMyDevice,myCommand.RawData, 65, &BytesWritten, 0);
+
+				CloseHandle(ReadHandleToMyDevice);
+				CloseHandle(WriteHandleToMyDevice);
 
 				this->btn_LogDevice->Text = L"Log Device";
 				bootloaderState = BOOTLOADER_IDLE;
@@ -1165,23 +1176,6 @@ namespace HIDBootLoader {
 			bootloaderState = BOOTLOADER_LOG;
 			LogThreadResults = LOG_RUNNING;
 
-			/*If a logging thread already exists
-			if(LogThread)
-			{
-				//If it is still running
-				if(LogThread->IsAlive)
-				{
-					//Then we don't want to create a new one.  Only one instance
-					//  of this thread should be running at any point of time
-					DEBUG_OUT("Logging thread already running");
-					return;
-				}
-
-				//if there is a thread but it isn't running then destroy the old
-				//  one so we can make a new one.
-				delete LogThread;
-			}*/
-
 			//If we are in not in debugging mode then clear the status box
 			#if !defined(DEBUGGING)
 				listBox1->Items->Clear();
@@ -1190,62 +1184,6 @@ namespace HIDBootLoader {
 			//Enable the main state machine to print out a new status
 			ENABLE_PRINT();
 			PRINT_STATUS("Logging Device");
-
-			#if defined(DEBUG_THREADS)
-				//If we are debugging then run the logging function inline
-				//  instead of in a thread so that we can print to the
-				//  window.
-				LogThreadStart();
-			#else
-				//If we are not in debugging mode then run the logging
-				//  function as a separete thread so that the user form
-				//  is still responsive while the logging function is taking
-				//  place
-				if (!LogThread)
-				{
-					LogThread = gcnew Thread(gcnew ThreadStart(this,&HIDBootLoader::Form1::LogThreadStart));
-
-					LogThread->Start();
-				}
-			#endif
-		}
-
-		/****************************************************************************
-			Function:
-				LogThreadStart
-
-			Description:
-				This function starts a new thread for logging the attached device.  
-
-			Precondition:
-				Device must be attached
-
-			Parameters:
-				None
-
-			Return Values:
-				None 
-
-			Other:
-				LogThreadResults should be set to LOG_RUNNING before calling
-				this function or creating a thread that uses this function.  The
-				LogThreadResults variable is modified to show the results of
-				the operation.
-
-			Remarks:
-				Caution should be used to only have a single instance of this 
-				thread running at any given point of time.
-		***************************************************************************/
-		private: System::Void LogThreadStart(void)
-		{
-			BOOTLOADER_COMMAND myCommand = {0};
-			BOOTLOADER_COMMAND myResponse = {0};
-			DWORD BytesWritten = 0;
-			DWORD BytesReceived = 0;
-			DWORD ErrorStatus = ERROR_SUCCESS; 
-
-			HANDLE ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
-			HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			//Create a new write handle to the device
 			WriteHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
@@ -1261,6 +1199,7 @@ namespace HIDBootLoader {
 			//  always set to 0.
 			myCommand.LogDevice.WindowsReserved = 0;
 			myCommand.LogDevice.Command = LOG_DEVICE;
+			myCommand.LogDevice.Level = 1;
 
 			//Send the command to the device
 			WriteFile(WriteHandleToMyDevice,myCommand.RawData, 65, &BytesWritten, 0);	
@@ -1269,34 +1208,28 @@ namespace HIDBootLoader {
 			ErrorStatus = GetLastError();
 			if(ErrorStatus == ERROR_SUCCESS)
 			{
+				DEBUG_OUT("Log thread Write OK");
 				LogThreadResults = LOG_RUNNING;
 			}
 			else
 			{
 				LogThreadResults = LOG_FAILED;
+				DEBUG_OUT("Log thread Write ERR");
 				CloseHandle(WriteHandleToMyDevice);
 				return;
 			}
 			
-			//Try to read a packet from the device
-			ReadHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
-			while(1)
+			// Open Read channelfrom the device
+			ReadHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath,
+				                   GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, 0);
+			ErrorStatus = GetLastError();
+			if(ErrorStatus != ERROR_SUCCESS)
 			{
-				ReadFile(ReadHandleToMyDevice, myResponse.RawData, 65, &BytesReceived, 0);	//Shouldn't really do this.  Becomes infinite blocking function if it can't successfully write, for example, because the USB firmware on the microcontroller never sets the UOWN bit for the OUT endpoint.
-				//Get the status of the read request
-				ErrorStatus = GetLastError();
-				if(ErrorStatus != ERROR_SUCCESS)
-					break;
-
-				//If we were able to successfully read from the device
-				printBuffer(myResponse.PacketData.Data,BytesReceived);
-
-				Sleep(0);	//Relinquish current CPU time slice to provide fair CPU sharing, 
-						    //but don't actually sleep the thread to avoid losing potential performance.
+				DEBUG_OUT("Failed Read handle");
+				CloseHandle(WriteHandleToMyDevice);
+				LogThreadResults = LOG_FAILED;
+				return;
 			}
-			CloseHandle(ReadHandleToMyDevice);
-			CloseHandle(WriteHandleToMyDevice);
-			LogThreadResults = (ErrorStatus == ERROR_SUCCESS) ? LOG_SUCCESS : LOG_FAILED;
 		}
 		#pragma endregion
 
@@ -1413,7 +1346,7 @@ namespace HIDBootLoader {
 			DWORD BytesWritten = 0;
 			DWORD ErrorStatus = ERROR_SUCCESS; 
 
-			HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
+			WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			//Create a new write file handle to the device so that we can send 
 			//  packets to the device
@@ -3523,8 +3456,8 @@ namespace HIDBootLoader {
 			bool configsProgrammed,everythingElseProgrammed;
 			bool skipBlock,blockSkipped;
 
-			HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
-			HANDLE ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
+			WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
+			ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			//Create a write handle to the USB device
 			WriteHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
@@ -4037,8 +3970,8 @@ namespace HIDBootLoader {
 					DEBUG_OUT("WM_DEVICECHANGE: DBT_DEVICEREMOVEPENDING");
 				}
 
-				HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
-				HANDLE ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
+				WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
+				ReadHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 				Status = TryToFindHIDDeviceFromVIDPID();
 				if(Status == TRUE)
@@ -4516,7 +4449,7 @@ namespace HIDBootLoader {
 			DWORD BytesWritten = 0;
 			DWORD ErrorStatus = ERROR_SUCCESS; 
 
-			HANDLE WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
+			WriteHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			//Update the progress status to 0%
 			progressStatus = 0;
@@ -4594,6 +4527,8 @@ namespace HIDBootLoader {
 		***************************************************************************/
 		private: System::Void tmr_ThreadStatus_Tick(System::Object^  sender, System::EventArgs^  e) 
 		{
+			DWORD PeekBytes;
+
 			if(inTimer == true)
 			{
 				return;
@@ -4979,7 +4914,22 @@ namespace HIDBootLoader {
 					switch(LogThreadResults)
 					{
 						case LOG_RUNNING:
-							// OK, busy
+							PeekBytes = 0;
+							PeekNamedPipe(ReadHandleToMyDevice, NULL, 0, 0, &PeekBytes, NULL);
+							DWORD ErrorStatus;
+
+							if (PeekBytes > 0)
+							{
+								unsigned char line[256];
+								DWORD BytesReceived = 0;
+
+								if (ReadFile(ReadHandleToMyDevice, line, 256, &BytesReceived, 0))
+									LogThreadResults = LOG_FAILED
+								else if (BytesReceived > 0)
+									// we were able to successfully read from the device
+									// Skip WindowsReserved byte???
+									printBuffer(line, BytesReceived);
+							}
 							break;
 
 						case LOG_FAILED:
@@ -4990,6 +4940,8 @@ namespace HIDBootLoader {
 							//If we got into some unknown state then return to idle
 							bootloaderState = BOOTLOADER_IDLE;
 							LogThreadResults = LOG_IDLE;
+							CloseHandle(WriteHandleToMyDevice);
+							CloseHandle(ReadHandleToMyDevice);
 							break;
 					}
 					break;
