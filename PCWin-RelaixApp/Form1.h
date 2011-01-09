@@ -44,6 +44,10 @@
 #include <Windows.h>	//Gives us defitions for various common and not so common types like DWORD, PCHAR, HANDLE, etc.
 #include <setupapi.h>	//Gives us definitions needed to use the SetupDixxx() functions.
 #include <Dbt.h>		//Need this for definitions of WM_DEVICECHANGE messages
+//#include <strsafe.h>    // for ErrorMessage()
+
+
+
 
 #pragma region Constants
 //Modify this value to match the VID and PID in your USB device descriptor.
@@ -96,7 +100,7 @@
 //*********************** LOGGING RESULTS ************************************
 #define LOG_IDLE                    0xFF
 #define LOG_RUNNING                 0x00
-#define LOG_SUCCESS				    0x01
+#define LOG_TERMINATE		        0x01
 #define LOG_FAILED		            0x02
 
 //*********************** VERIFY RESULTS ***********************************
@@ -402,7 +406,61 @@ namespace HIDBootLoader {
 		HANDLE hRecipient,
 		LPVOID NotificationFilter,
 		DWORD Flags);
+
+	[DllImport("forms.dll", CharSet = CharSet::Seeifdef, EntryPoint="MessageBox")]
+	extern "C" int WINAPI MessageBox(
+		HWND hWnd,
+		LPCTSTR lpText,
+		LPCTSTR lpCaption,
+		UINT uType);
+
+	[DllImport("kernel32.dll", SetLastError=true)]
+	extern "C" int FormatMessage(
+		DWORD dwFlags,
+		LPCVOID lpSource,
+		DWORD dwMessageId,
+		DWORD dwLanguageId,
+		LPTSTR lpBuffer,
+		DWORD nSize,
+		LPCVOID Arguments);
+		//va_list *Arguments);
+
 	#pragma endregion
+
+
+	static void ErrorMessage(LPTSTR lpszFunction, DWORD err)
+	{ 
+	    // Retrieve the system error message for the last-error code
+
+	    LPTSTR lpMsgBuf;
+//	    LPVOID lpDisplayBuf;
+
+	   FormatMessage(
+	        FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+	        FORMAT_MESSAGE_FROM_SYSTEM |
+	        FORMAT_MESSAGE_IGNORE_INSERTS,
+	        NULL,
+	        err,
+	       MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+	       (LPTSTR) &lpMsgBuf,
+	        0, NULL );
+
+	   // Display the error message and exit the process
+
+//	    lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, 
+//	        (lstrlen((LPCTSTR)lpMsgBuf) + lstrlen((LPCTSTR)lpszFunction) + 40) * sizeof(TCHAR)); 
+//	    StringCchPrintf((LPTSTR)lpDisplayBuf, 
+//	       LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+//	       TEXT("%s failed with error %d: %s"), 
+//	       lpszFunction, err, lpMsgBuf); 
+//	   MessageBox(NULL, (LPCTSTR)lpDisplayBuf, TEXT("Error"), MB_OK); 
+	   MessageBox(NULL, (LPCTSTR)lpMsgBuf, TEXT("Error"), MB_OK); 
+
+	   LocalFree(lpMsgBuf);
+//	   LocalFree(lpDisplayBuf);
+	   //ExitProcess(dw); 
+	}
+
 
 	#pragma region Global Variables
 	/*** This section is all of the global variables releated to this namespace ***/
@@ -410,13 +468,22 @@ namespace HIDBootLoader {
 	//Globally Unique Identifier (GUID) for HID class devices.  Windows uses GUIDs to identify things.
 	GUID InterfaceClassGuid = {0x4d1e55b2, 0xf16f, 0x11cf, 0x88, 0xcb, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30}; 
 
-	PSP_DEVICE_INTERFACE_DETAIL_DATA MyStructureWithDetailedInterfaceDataInIt = new SP_DEVICE_INTERFACE_DETAIL_DATA;	//Make this global, so we can pass the device path to various CreateFile() calls all over the program
+	PSP_DEVICE_INTERFACE_DETAIL_DATA MyStructureWithDetailedInterfaceDataInIt = new SP_DEVICE_INTERFACE_DETAIL_DATA;
+	//Make this global, so we can pass the device path to various CreateFile() calls all over the program
 	BOOL MyDeviceAttachedStatus = false;	//False = disconnected, true = connected.
 	DWORD ErrorStatusWrite = ERROR_SUCCESS;
 	DWORD ErrorStatusRead = ERROR_SUCCESS;
 	BOOL Status = false;
+	// JvE: various variables for the Logging thread
+	bool logPendingAsyncRead;
+	OVERLAPPED logReadStructure;
+	HANDLE logReadEvent = INVALID_HANDLE_VALUE;
+	unsigned char logLine[256];
+	DWORD logBytesReceived;
 
 	#pragma endregion
+
+
 
 	public ref class Form1 : public System::Windows::Forms::Form
 	{
@@ -432,7 +499,7 @@ namespace HIDBootLoader {
 		unsigned char QueryThreadResults;
 		unsigned char ProgramThreadResults;
 		unsigned char EraseThreadResults;
-		unsigned char LogThreadResults;
+		volatile unsigned char LogThreadResults;
 		unsigned char VerifyThreadResults;
 		unsigned char ReadThreadResults;
 		unsigned char UnlockConfigThreadResults;
@@ -467,6 +534,8 @@ namespace HIDBootLoader {
 		// for logging purpose.
 		HANDLE WriteHandleToMyDevice;
 		HANDLE ReadHandleToMyDevice;
+		volatile HANDLE AsyncReadHandleToMyDevice;
+
 
 		unsigned char *pData;
 		unsigned char *pData0;
@@ -641,6 +710,7 @@ namespace HIDBootLoader {
 		}
 
 		#pragma endregion
+
 
 		#pragma region Windows Form Designer generated code
 		/// <summary>
@@ -850,6 +920,7 @@ namespace HIDBootLoader {
 		#pragma endregion
 
 		#pragma region Query Functions
+
 		/****************************************************************************
 			Function:
 				QueryThreadStart
@@ -1136,6 +1207,28 @@ namespace HIDBootLoader {
 			Remarks:
 				None
 		***************************************************************************/
+		private: void StopLogging(void)
+		{
+			BOOTLOADER_COMMAND cmd = {0};
+			DWORD BytesWritten = 0;
+			DEBUG_OUT("Stop Logging");
+			//Create the command packet to stop logging by the device.  The
+			//  Command should be logging and the WindowsReserved byte should be
+			//  always set to 0.
+			cmd.LogDevice.WindowsReserved = 0;
+			cmd.LogDevice.Command = LOG_DEVICE;
+			cmd.LogDevice.Level = 0;
+
+			//Send the command to the device
+			WriteFile(WriteHandleToMyDevice,cmd.RawData, 65, &BytesWritten, 0);
+			CloseHandle(WriteHandleToMyDevice);
+
+			this->btn_LogDevice->Text = L"Log Device";
+			LogThreadResults = LOG_TERMINATE;
+			bootloaderState = BOOTLOADER_IDLE;
+			EnableButtons();
+		}
+
 		private: System::Void btn_LogDevice_Click(System::Object^  sender, System::EventArgs^  e) 
 		{
 			DEBUG_OUT(">>btn_LogDevice pressed");
@@ -1145,24 +1238,22 @@ namespace HIDBootLoader {
 
 			if (bootloaderState == BOOTLOADER_LOG)
 			{
-				DEBUG_OUT("Stop Logging");
-				//Create the command packet to stop logging by the device.  The
-				//  Command should be logging and the WindowsReserved byte should be
-				//  always set to 0.
-				myCommand.LogDevice.WindowsReserved = 0;
-				myCommand.LogDevice.Command = LOG_DEVICE;
-				myCommand.LogDevice.Level = 0;
+				// OK: just end logging state on request
+				CancelIo(AsyncReadHandleToMyDevice);
+				CloseHandle(AsyncReadHandleToMyDevice);
+				//myCommand.LogDevice.Command = LOG_DEVICE;
+				//WriteFile(WriteHandleToMyDevice,myCommand.RawData, 65, &BytesWritten, 0);
+				//CloseHandle(WriteHandleToMyDevice);
+				StopLogging();
+				return;
+			}
 
-				//Send the command to the device
-				WriteFile(WriteHandleToMyDevice,myCommand.RawData, 65, &BytesWritten, 0);
-
-				CloseHandle(ReadHandleToMyDevice);
-				CloseHandle(WriteHandleToMyDevice);
-
-				this->btn_LogDevice->Text = L"Log Device";
-				bootloaderState = BOOTLOADER_IDLE;
-			    LogThreadResults = LOG_IDLE;
-				EnableButtons();
+			//Create a new write handle to the device
+			WriteHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
+			ErrorStatusWrite = GetLastError();
+			if(ErrorStatusWrite != ERROR_SUCCESS)
+			{
+				DEBUG_OUT("Failed to start logging on device");
 				return;
 			}
 
@@ -1174,7 +1265,6 @@ namespace HIDBootLoader {
 			//update the state of the booloader state machine to reflect
 			//  that we are starting logging modus
 			bootloaderState = BOOTLOADER_LOG;
-			LogThreadResults = LOG_RUNNING;
 
 			//If we are in not in debugging mode then clear the status box
 			#if !defined(DEBUGGING)
@@ -1184,15 +1274,6 @@ namespace HIDBootLoader {
 			//Enable the main state machine to print out a new status
 			ENABLE_PRINT();
 			PRINT_STATUS("Logging Device");
-
-			//Create a new write handle to the device
-			WriteHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
-			ErrorStatusWrite = GetLastError();
-			if(ErrorStatusWrite != ERROR_SUCCESS)
-			{
-				LogThreadResults = LOG_FAILED;
-				return;
-			}
 
 			//Create the command packet that we want to send to the device.  The
 			//  Command should be logging and the WindowsReserved byte should be
@@ -1209,27 +1290,28 @@ namespace HIDBootLoader {
 			if(ErrorStatus == ERROR_SUCCESS)
 			{
 				DEBUG_OUT("Log thread Write OK");
-				LogThreadResults = LOG_RUNNING;
 			}
 			else
 			{
 				LogThreadResults = LOG_FAILED;
 				DEBUG_OUT("Log thread Write ERR");
-				CloseHandle(WriteHandleToMyDevice);
+				StopLogging();
 				return;
 			}
 			
-			// Open Read channelfrom the device
-			ReadHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath,
-				                   GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, 0);
+			// Open Read channelfrom the device. Doing actual read is postponed to another thread.
+			AsyncReadHandleToMyDevice = CreateFile(MyStructureWithDetailedInterfaceDataInIt->DevicePath,
+				                   GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, 0);
 			ErrorStatus = GetLastError();
 			if(ErrorStatus != ERROR_SUCCESS)
 			{
 				DEBUG_OUT("Failed Read handle");
-				CloseHandle(WriteHandleToMyDevice);
-				LogThreadResults = LOG_FAILED;
+				StopLogging();
 				return;
 			}
+
+			// Finally inform other thread that it can start logging
+			LogThreadResults = LOG_RUNNING;
 		}
 		#pragma endregion
 
@@ -1523,7 +1605,7 @@ namespace HIDBootLoader {
 			unsigned char* lastAddress = 0;
 
 			HANDLE AsyncWriteHandleToMyDevice = INVALID_HANDLE_VALUE;
-			HANDLE AsyncReadHandleToMyDevice = INVALID_HANDLE_VALUE;
+			AsyncReadHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			OVERLAPPED OverlappedWriteStructure;
 			OVERLAPPED OverlappedWriteStructure2;
@@ -1997,7 +2079,7 @@ namespace HIDBootLoader {
 
 
 			HANDLE AsyncWriteHandleToMyDevice = INVALID_HANDLE_VALUE;
-			HANDLE AsyncReadHandleToMyDevice = INVALID_HANDLE_VALUE;
+			AsyncReadHandleToMyDevice = INVALID_HANDLE_VALUE;
 
 			OVERLAPPED OverlappedWriteStructure;
 			OVERLAPPED OverlappedWriteStructure2;
@@ -4527,8 +4609,13 @@ namespace HIDBootLoader {
 		***************************************************************************/
 		private: System::Void tmr_ThreadStatus_Tick(System::Object^  sender, System::EventArgs^  e) 
 		{
-			DWORD PeekBytes;
+			//static bool PendingAsyncRead;
+			//static OVERLAPPED OverlappedReadStructure;
+			//static HANDLE ReadCompleteEvent = INVALID_HANDLE_VALUE;
+			//static unsigned char line[256];
+			//static DWORD BytesReceived;
 
+			
 			if(inTimer == true)
 			{
 				return;
@@ -4914,34 +5001,104 @@ namespace HIDBootLoader {
 					switch(LogThreadResults)
 					{
 						case LOG_RUNNING:
-							PeekBytes = 0;
-							PeekNamedPipe(ReadHandleToMyDevice, NULL, 0, 0, &PeekBytes, NULL);
-							DWORD ErrorStatus;
+							if (logReadEvent == INVALID_HANDLE_VALUE)
+								logReadEvent = CreateEvent(NULL, TRUE, TRUE, (LPCTSTR)"ReadLogEvent");
 
-							if (PeekBytes > 0)
+
+							if (!logPendingAsyncRead)
 							{
-								unsigned char line[256];
-								DWORD BytesReceived = 0;
+									ENABLE_PRINT();
+									PRINT_STATUS("r");
+								logReadStructure.Internal = 0;
+								logReadStructure.InternalHigh = 0;
+								logReadStructure.Offset = 0;
+								logReadStructure.OffsetHigh = 0;
+								logReadStructure.Pointer = 0;
+								logReadStructure.hEvent = logReadEvent;
+								SetEvent(logReadEvent);
 
-								if (ReadFile(ReadHandleToMyDevice, line, 256, &BytesReceived, 0))
-									LogThreadResults = LOG_FAILED
-								else if (BytesReceived > 0)
+								logLine[0] = 0; // WindowsReserved Byte???
+								//myResponse.GetDataResults.WindowsReserved = 0;
+
+
+								//Queue an asynchronous read from the device
+								logPendingAsyncRead = true;
+								logBytesReceived = 0;
+								if(ReadFile(AsyncReadHandleToMyDevice, logLine, 65, &logBytesReceived, &logReadStructure))
+								//if(ReadFile(AsyncReadHandleToMyDevice, myResponse.RawData, 65, &BytesReceived, &OverlappedReadStructure))
+								{
+									//If the read was completed synchronously, OK.
+									logPendingAsyncRead = false;
+								}
+								else //probably because asynchronous I/O pending, but need to make certain
+								{
+									DWORD err = GetLastError();
+									DWORD errs[] = {ERROR_IO_PENDING, ERROR_HANDLE_EOF, ERROR_INVALID_USER_BUFFER, ERROR_NOT_ENOUGH_MEMORY,
+											ERROR_OPERATION_ABORTED, ERROR_NOT_ENOUGH_QUOTA, ERROR_INSUFFICIENT_BUFFER, ERROR_BROKEN_PIPE,
+											ERROR_MORE_DATA, ERROR_INVALID_PARAMETER}; // for Debug...
+
+									if(err != ERROR_IO_PENDING)
+									{
+										LogThreadResults = LOG_FAILED;
+										logPendingAsyncRead = false;
+										//ErrorMessage(TEXT("BootLoaderLog ReadFile()"), err);
+										ENABLE_PRINT();
+										PRINT_STATUS("ER");
+
+                                        //sprintf(TEXT("GetOverlappedResult failed (%d): %s\n"), dwError, errMsg);
+										//LocalFree((LPVOID)errMsg);
+									}
+								}
+							}
+
+							if (logPendingAsyncRead)
+							{
+								if (GetOverlappedResult(AsyncReadHandleToMyDevice,&logReadStructure,&logBytesReceived,FALSE))
+								{
+									ENABLE_PRINT();
+									PRINT_STATUS("a");
+									logPendingAsyncRead = false;
+									ResetEvent(logReadStructure.hEvent);
+								} else
+								{
+									DWORD err = GetLastError();
+									if(err != ERROR_IO_INCOMPLETE)
+									{
+										LogThreadResults = LOG_FAILED;
+										logPendingAsyncRead = false;
+										//LPCTSTR errMsg = ErrorMessage(err);
+										ENABLE_PRINT();
+										PRINT_STATUS("OE");
+									}
+								}
+							}
+
+							if (!logPendingAsyncRead && LogThreadResults == LOG_RUNNING || logBytesReceived != 0)
+							{
+								ENABLE_PRINT();
+								PRINT_STATUS(HexToString(logBytesReceived,2) + " ");
+								if (logBytesReceived > 0)
+								{
 									// we were able to successfully read from the device
 									// Skip WindowsReserved byte???
-									printBuffer(line, BytesReceived);
+									logLine[1+logBytesReceived] = '\0';
+									//String s;
+									//s.assign(line+1);
+									ENABLE_PRINT();
+									PRINT_STATUS("s");
+								}
+								logBytesReceived = 0;
 							}
 							break;
-
 						case LOG_FAILED:
 							//If it is running then let the user know
+							ENABLE_PRINT();
 							PRINT_STATUS("Logging I/O failure");
-						case LOG_SUCCESS:
-						default:
-							//If we got into some unknown state then return to idle
-							bootloaderState = BOOTLOADER_IDLE;
-							LogThreadResults = LOG_IDLE;
-							CloseHandle(WriteHandleToMyDevice);
-							CloseHandle(ReadHandleToMyDevice);
+						default: // LOG_TERMINATE
+							CancelIo(AsyncReadHandleToMyDevice);
+							logPendingAsyncRead = false;
+							CloseHandle(AsyncReadHandleToMyDevice);
+							StopLogging();
 							break;
 					}
 					break;
