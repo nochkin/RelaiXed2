@@ -209,6 +209,9 @@
 #define tris_usb_bus_sense  TRISCbits.TRISC6    // Input
 #define usb_bus_sense       PORTCbits.RC6
 #define self_power          1
+#define mSetLogMode         (PIR3bits.CTMUIF = 1)
+#define mClrLogMode         (PIR3bits.CTMUIF = 0)
+#define mGetLogMode         PIR3bits.CTMUIF
 
 #define LEDright            PORTCbits.RC7
 #define mInitAllLEDs()      TRISB = 0xFF; TRISC = 0x7F; PORTB = 0; PORTC = 0x80; // led-drivers are 'opendrain'
