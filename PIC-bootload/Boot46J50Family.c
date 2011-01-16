@@ -416,7 +416,7 @@ void ProcessIO(void)
 			case LOG_DEVICE:
 			{
 				if (PacketFromPC.PacketDataFieldSize) // 2nd byte in Packet is used as log-level
-					mSetLogMode // Use otherwise unused flag to capture logging state
+					mSetLogMode; // Use otherwise unused flag to capture logging state
 				else
 					mClrLogMode;
 				BootState = Idle;
