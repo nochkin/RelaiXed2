@@ -176,7 +176,7 @@
 
 #pragma region Macros
 
-#define DEBUGGING
+//#define DEBUGGING
 //#define DEBUG_BUTTONS
 //#define DEBUG_THREADS
 //#define DEBUG_USB
@@ -474,12 +474,6 @@ namespace HIDBootLoader {
 	DWORD ErrorStatusWrite = ERROR_SUCCESS;
 	DWORD ErrorStatusRead = ERROR_SUCCESS;
 	BOOL Status = false;
-	// JvE: various variables for the Logging thread
-	bool logPendingAsyncRead;
-	OVERLAPPED logReadStructure;
-	HANDLE logReadEvent = INVALID_HANDLE_VALUE;
-	unsigned char logLine[256];
-	DWORD logBytesReceived;
 
 	#pragma endregion
 
@@ -4609,11 +4603,12 @@ namespace HIDBootLoader {
 		***************************************************************************/
 		private: System::Void tmr_ThreadStatus_Tick(System::Object^  sender, System::EventArgs^  e) 
 		{
-			//static bool PendingAsyncRead;
-			//static OVERLAPPED OverlappedReadStructure;
-			//static HANDLE ReadCompleteEvent = INVALID_HANDLE_VALUE;
-			//static unsigned char line[256];
-			//static DWORD BytesReceived;
+			// JvE: various variables for the Logging thread
+			static bool logPendingAsyncRead;
+			static OVERLAPPED logReadStructure;
+			static HANDLE logReadEvent = INVALID_HANDLE_VALUE;
+			static char logLine[256];
+			static DWORD logBytesReceived;
 
 			
 			if(inTimer == true)
@@ -4998,8 +4993,10 @@ namespace HIDBootLoader {
 				/*****************************************************/
 				case BOOTLOADER_LOG:
 					//Check the status of the logging thread
+
 					switch(LogThreadResults)
 					{
+
 						case LOG_RUNNING:
 							if (logReadEvent == INVALID_HANDLE_VALUE)
 								logReadEvent = CreateEvent(NULL, TRUE, TRUE, (LPCTSTR)"ReadLogEvent");
@@ -5007,8 +5004,6 @@ namespace HIDBootLoader {
 
 							if (!logPendingAsyncRead)
 							{
-									ENABLE_PRINT();
-									PRINT_STATUS("r");
 								logReadStructure.Internal = 0;
 								logReadStructure.InternalHigh = 0;
 								logReadStructure.Offset = 0;
@@ -5033,20 +5028,12 @@ namespace HIDBootLoader {
 								else //probably because asynchronous I/O pending, but need to make certain
 								{
 									DWORD err = GetLastError();
-									DWORD errs[] = {ERROR_IO_PENDING, ERROR_HANDLE_EOF, ERROR_INVALID_USER_BUFFER, ERROR_NOT_ENOUGH_MEMORY,
-											ERROR_OPERATION_ABORTED, ERROR_NOT_ENOUGH_QUOTA, ERROR_INSUFFICIENT_BUFFER, ERROR_BROKEN_PIPE,
-											ERROR_MORE_DATA, ERROR_INVALID_PARAMETER}; // for Debug...
-
 									if(err != ERROR_IO_PENDING)
 									{
 										LogThreadResults = LOG_FAILED;
 										logPendingAsyncRead = false;
-										//ErrorMessage(TEXT("BootLoaderLog ReadFile()"), err);
 										ENABLE_PRINT();
-										PRINT_STATUS("ER");
-
-                                        //sprintf(TEXT("GetOverlappedResult failed (%d): %s\n"), dwError, errMsg);
-										//LocalFree((LPVOID)errMsg);
+										PRINT_STATUS("Read from USB failed");
 									}
 								}
 							}
@@ -5055,38 +5042,56 @@ namespace HIDBootLoader {
 							{
 								if (GetOverlappedResult(AsyncReadHandleToMyDevice,&logReadStructure,&logBytesReceived,FALSE))
 								{
-									ENABLE_PRINT();
-									PRINT_STATUS("a");
 									logPendingAsyncRead = false;
 									ResetEvent(logReadStructure.hEvent);
 								} else
 								{
 									DWORD err = GetLastError();
-									if(err != ERROR_IO_INCOMPLETE)
+									DWORD errs[] = {ERROR_IO_PENDING, ERROR_IO_INCOMPLETE,
+											ERROR_HANDLE_EOF, ERROR_INVALID_USER_BUFFER,
+											ERROR_NOT_ENOUGH_MEMORY, ERROR_OPERATION_ABORTED,
+											ERROR_NOT_ENOUGH_QUOTA, ERROR_INSUFFICIENT_BUFFER,
+											ERROR_BROKEN_PIPE, ERROR_MORE_DATA};
+									if(err != ERROR_IO_INCOMPLETE && err != ERROR_OPERATION_ABORTED)
 									{
 										LogThreadResults = LOG_FAILED;
 										logPendingAsyncRead = false;
-										//LPCTSTR errMsg = ErrorMessage(err);
+										LPWSTR errmsg = NULL;
+										FormatMessage(
+											FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+											FORMAT_MESSAGE_FROM_SYSTEM |
+											FORMAT_MESSAGE_IGNORE_INSERTS,
+											NULL,
+											err,
+											MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+											(LPWSTR) &errmsg,
+											0, NULL );
+										String ^s = gcnew String((LPWSTR)errmsg);
 										ENABLE_PRINT();
-										PRINT_STATUS("OE");
+										PRINT_STATUS("Async read error");
+										ENABLE_PRINT();
+										PRINT_STATUS(s);
+									} else if (err == ERROR_OPERATION_ABORTED)
+									{
+										// Previous operation got aborted due a 'Stop Logging': just skip this error
+										logPendingAsyncRead = false;
+										ResetEvent(logReadStructure.hEvent);
 									}
 								}
 							}
 
-							if (!logPendingAsyncRead && LogThreadResults == LOG_RUNNING || logBytesReceived != 0)
+							if (!logPendingAsyncRead && LogThreadResults == LOG_RUNNING && logBytesReceived > 0)
 							{
+								// we were able to successfully read from the device
+								// Skip WindowsReserved byte prepended to my array... :-(
+								unsigned int msglen = logLine[1];
+								if (msglen > 61) msglen = 61;
+								logLine[3+msglen] = '\0';
+								const char *s1=logLine+3;
+								String ^s2= gcnew String(s1);
 								ENABLE_PRINT();
-								PRINT_STATUS(HexToString(logBytesReceived,2) + " ");
-								if (logBytesReceived > 0)
-								{
-									// we were able to successfully read from the device
-									// Skip WindowsReserved byte???
-									logLine[1+logBytesReceived] = '\0';
-									//String s;
-									//s.assign(line+1);
-									ENABLE_PRINT();
-									PRINT_STATUS("s");
-								}
+								PRINT_STATUS(s2);
+							
 								logBytesReceived = 0;
 							}
 							break;
