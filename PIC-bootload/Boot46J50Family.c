@@ -98,6 +98,7 @@
 #define	PROGRAM_COMPLETE			0x06	//If host send less than a RequestDataBlockSize to be programmed, or if it wished to program whatever was left in the buffer, it uses this command.
 #define GET_DATA					0x07	//The host sends this command in order to read out memory from the device.  Used during verify (and read/export hex operations)
 #define	RESET_DEVICE				0x08	//Resets the microcontroller, so it can update the config bits (if they were programmed, and so as to leave the bootloader (and potentially go back into the main application)
+#define LOG_DEVICE                  0x09    // JvE: new mode to provide application trace logs through USB to the host
 
 //Unlock Configs Command Definitions
 #define UNLOCKCONFIG				0x00	//Sub-command for the ERASE_DEVICE command
@@ -410,6 +411,15 @@ void ProcessIO(void)
 				//Otherwise host might not realize we disconnected/reconnected when we do the reset.
 				LongDelay();
 				Reset();
+			}
+				break;
+			case LOG_DEVICE:
+			{
+				if (PacketFromPC.PacketDataFieldSize) // 2nd byte in Packet is used as log-level
+					mSetLogMode // Use otherwise unused flag to capture logging state
+				else
+					mClrLogMode;
+				BootState = Idle;
 			}
 				break;
 		}//End switch
