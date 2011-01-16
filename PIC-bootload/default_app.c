@@ -74,11 +74,15 @@ void app_main(void)
 
 void try_USB_log( void)
 {
-	char msg[2] = {'.', 0};
+	//char msg[2] = {'.', 0};
+	char command[64] = {0x09 /* command = LOG_DEVICE */ ,
+	                    2 /* length of payload string */,
+	                    'a', '.',
+	                    0 /* padding */};
 	mLED_7_Toggle()
 	
 	if (!mHIDTxIsBusy())
-		HIDTxReport(msg, 1);
+		HIDTxReport(command, 64);
 }
 	
 void check_usb_power(void)
