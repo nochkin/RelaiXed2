@@ -52,7 +52,9 @@
 #pragma region Constants
 //Modify this value to match the VID and PID in your USB device descriptor.
 //Use the formatting: "Vid_xxxx&Pid_xxxx" where xxxx is a 16-bit hexadecimal number.
-#define MY_DEVICE_ID  "Vid_04d8&Pid_003c"	
+//#define MY_DEVICE_ID  "Vid_04d8&Pid_003c"
+// Above was original PIC bootloader, below is new official Relaixed Pid:
+#define MY_DEVICE_ID  "Vid_04d8&Pid_fb29"	
 
 //*********************** BOOTLOADER COMMANDS ******************************
 #define QUERY_DEVICE				0x02
@@ -905,7 +907,7 @@ namespace HIDBootLoader {
 			this->Controls->Add(this->btn_ProgramVerify);
 			this->Controls->Add(this->listBox1);
 			this->Name = L"Form1";
-			this->Text = L"Microchip USB HID Bootloader v2.6";
+			this->Text = L"Microchip USB HID Bootloader v2.6 - Relaixed";
 			this->SizeChanged += gcnew System::EventHandler(this, &Form1::Form1_SizeChanged);
 			this->ResumeLayout(false);
 			this->PerformLayout();
@@ -1205,7 +1207,8 @@ namespace HIDBootLoader {
 		{
 			BOOTLOADER_COMMAND cmd = {0};
 			DWORD BytesWritten = 0;
-			DEBUG_OUT("Stop Logging");
+			ENABLE_PRINT();
+			PRINT_STATUS("Stop Logging");
 			//Create the command packet to stop logging by the device.  The
 			//  Command should be logging and the WindowsReserved byte should be
 			//  always set to 0.
