@@ -10,7 +10,9 @@
 #define HID_INT_OUT_EP_SIZE     64
 #define HID_INT_IN_EP_SIZE      64
 
-extern void usb_write(char *buffer, byte len);
+extern void usb_write(const char *buffer, byte len);
 extern byte usb_read(char *buffer, byte len);
+extern byte usb_state(void);
+
 
 #endif //USB_IO_H

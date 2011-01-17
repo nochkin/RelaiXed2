@@ -5,7 +5,6 @@
  ********************************************************************/
 #include "typedefs.h"
 #include "io_cfg.h"
-#include "usb_io.h"
 
 /* Exported globals */
 byte display_cnt; // increments on every display refresh (is at 160Hz)
@@ -27,7 +26,6 @@ static rom char segment_table[] = {
 void display_isr(void)
 {
 	byte segment;
-	char s[1] = {'a'};
 	display_cnt++;
 
 	/* first switch LEDs off (TRIS to '1') */
@@ -43,11 +41,7 @@ void display_isr(void)
 	TRISC &= (segment >> 4);
 	PORTB &= 0xF0;
 	PORTC &= 0xF8;
-	
-	// signal some activity to USB
-	if (display_cnt == 0)
-		usb_write(s, 1);
-	
+		
 	// reset interrupt flag: await new TMR4 wrap-around
 	PIR3bits.TMR4IF = 0;
 }
