@@ -73,8 +73,12 @@ typedef union _BDT
 #define HID_BD_IN               ep1Bi
 #define HID_INT_IN_EP_SIZE      64
 
-volatile far BDT ep1Bi =  0x00040c;
-volatile far BDT ep1Bo =  0x000408;
+/* locations of ep1Bo and ep1io taken from the memory-map of the bootloader! */
+#pragma udata usb_endpoints=0x000408
+volatile far BDT ep1Bo;
+volatile far BDT ep1Bi;
+#pragma udata
+
 #define  hid_report_in  (HID_BD_IN.ADR)
 #define  hid_report_out (HID_BD_OUT.ADR)
 
@@ -177,24 +181,31 @@ volatile far BDT ep1Bo =  0x000408;
  *
  * Note:            None
  *****************************************************************************/
-static void HIDTxReport(char *buffer, byte len)
+static void HIDTxReport_log(const char *buffer, byte len)
 {
+	/* JvE: modified function for 'Logging' purpose only: use Log packet format,
+	 *      without doing an extra buffer copy
+	 */
+	 
 	byte i;
 	
     /*
      * Value of len should be equal to or smaller than HID_INT_IN_EP_SIZE.
      * This check forces the value of len to meet the precondition.
      */
-	if(len > HID_INT_IN_EP_SIZE)
-	    len = HID_INT_IN_EP_SIZE;
+	if(len > HID_INT_IN_EP_SIZE-3)
+	    len = HID_INT_IN_EP_SIZE-3;
 
    /*
     * Copy data from user's buffer to dual-ram buffer
     */
+    hid_report_in[0] = 0x09; /* LOG_DEVICE packet format */
+    hid_report_in[1] = len; /* logging-message text length */
     for (i = 0; i < len; i++)
-    	hid_report_in[i] = buffer[i];
+    	hid_report_in[i+2] = buffer[i];
+    hid_report_in[i+2] = '\0'; /* enforce string termination */
 
-    HID_BD_IN.Cnt = len;
+    HID_BD_IN.Cnt = HID_INT_IN_EP_SIZE;
     mUSBBufferReady(HID_BD_IN);
 
 }//end HIDTxReport
@@ -268,6 +279,24 @@ static byte HIDRxReport(char *buffer, byte len)
  * Finally my own read/write functions....
  *****************************************************************************/
 
+/* Logging enabled/disabled mode is set from bootloader kernel
+ * #define mSetLogMode         (PIR3bits.CTMUIF = 1)
+ * #define mClrLogMode         (PIR3bits.CTMUIF = 0)
+ */
+#define mGetLogMode         PIR3bits.CTMUIF
+
+byte usb_state(void)
+{
+	BDT bdtin = HID_BD_IN;
+	
+	byte state = 0;
+	if (UCONbits.USBEN) state |= 1;
+	if (mHIDTxIsBusy()) state |= 2;
+	if (mGetLogMode) state |= 4;
+	
+	return state;
+}
+
 byte usb_read(char *buffer, byte len)
 {
 	unsigned short i;
@@ -282,11 +311,11 @@ byte usb_read(char *buffer, byte len)
     return HIDRxReport(buffer, len);
 }
 
-void usb_write( char *buffer, byte len)
+void usb_write( const char *buffer, byte len)
 {
 	unsigned short i;
 	
-	if (!UCONbits.USBEN)
+	if (!UCONbits.USBEN || !mGetLogMode)
 		return;
 
 	for (i=0; mHIDTxIsBusy() && i < 1000; i++)
@@ -294,5 +323,6 @@ void usb_write( char *buffer, byte len)
 		// Why !!$#$#!# did Microchip not support USB pingpong buffers in their firmware?
 	
 	if(!mHIDTxIsBusy())
- 		HIDTxReport(buffer, len);
-}	
+ 		HIDTxReport_log(buffer, len);
+}
+

@@ -27,6 +27,7 @@
 #include "typedefs.h"                   
 #include "io_cfg.h"
 #include "display.h"
+#include "usb_io.h"
 
 // Forward declarations
 void app_isr_high(void);
@@ -72,6 +73,8 @@ void app_interrupt_at_low_vector(void)
 void main(void)
 {
 	unsigned int i;
+	char usb_char;
+	const char usb_msg[] = {'l', 'o', 'g'};
 	
 	init();
 	
@@ -80,12 +83,15 @@ void main(void)
 	{
 		for (i=0; i<64000; i++)
 			;
-		
+			
+		usb_char = usb_state();
+				
 		if (display_cnt < 0x80)
-			display_set( DIGIT_C, 0);
+			display_set( DIGIT_C, usb_char);
 		else
-		    display_set( DIGIT_minus, 1);
+		    display_set( DIGIT_minus, usb_char);
 
+		usb_write(usb_msg, (byte)3);
 		check_usb_power();
 	}
 }
