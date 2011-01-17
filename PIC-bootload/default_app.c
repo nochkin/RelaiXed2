@@ -63,9 +63,15 @@ void app_main(void)
 		
 		if (j==0 && UCONbits.USBEN && mGetLogMode)
 			try_USB_log();
-		else if (UCONbits.USBEN)
-			mLED_7_On()
-		else
+		
+		/* show USB status */
+		if (UCONbits.USBEN)
+		{
+			if (mGetLogMode)
+				mLED_7_Toggle()
+			else
+				mLED_7_On()
+		} else
 			mLED_7_Off()
 
 		check_usb_power();
@@ -74,13 +80,11 @@ void app_main(void)
 
 void try_USB_log( void)
 {
-	//char msg[2] = {'.', 0};
 	char command[64] = {0x09 /* command = LOG_DEVICE */ ,
 	                    2 /* length of payload string */,
 	                    'a', '.',
 	                    0 /* padding */};
-	mLED_7_Toggle()
-	
+	                    
 	if (!mHIDTxIsBusy())
 		HIDTxReport(command, 64);
 }
