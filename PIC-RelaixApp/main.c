@@ -28,6 +28,7 @@
 #include "io_cfg.h"
 #include "display.h"
 #include "usb_io.h"
+#include "amp_state.h"
 
 // Forward declarations
 void app_isr_high(void);
@@ -74,10 +75,15 @@ void main(void)
 {
 	unsigned int i;
 	char usb_char;
-	const char usb_msg[] = {'l', 'o', 'g'};
+	//const char usb_msg[] = {'l', 'o', 'g'};
 	
 	init();
-	
+	amp_state_init();
+		
+	// Globally enable interrupts
+	RCONbits.IPEN = 1;
+	INTCONbits.GIEH = 1;
+	INTCONbits.GIEL = 1;
 	
 	while (1)
 	{
@@ -91,7 +97,11 @@ void main(void)
 		else
 		    display_set( DIGIT_minus, usb_char);
 
-		usb_write(usb_msg, (byte)3);
+		if (INTCON3bits.INT2IF)
+			volume_update();
+		//usb_write(usb_msg, (byte)3);
+		
+		/* some I/O to check repeatedly, for absence of interrupt-on-change */
 		check_usb_power();
 	}
 }
@@ -111,10 +121,31 @@ void check_usb_power(void)
 #pragma interruptlow app_isr_low
 void app_isr_low(void)
 {
+	char vol_msg[] = {'V', '0', '0', '0'};
+	
 	if (PIE2bits.USBIE && PIR2bits.USBIF)
 	{
 		PIR2bits.USBIF = 0;
-	}	
+	}
+	
+	if (INTCON3bits.INT2IE && INTCON3bits.INT2IF)
+	{   // edge on VolA input: check edge-direction of VolA against VolB valua:
+		INTCON3bits.INT2IE = 0;
+		
+		if (INTCON2bits.INTEDG1 == VolB)
+			volume_incr -= 1;
+		else
+			volume_incr += 1;
+
+		//vol_msg[1] = VolA ? '1' : '0';
+		//vol_msg[2] = VolB ? '1' : '0';
+		//vol_msg[3] = INTCON2bits.INTEDG1 ? '1' : '0';
+		//usb_write(vol_msg, (byte)4);
+		
+		// do not yet clear INTCON3bits.INT2IF: wait some cycles to reduce sensitivity
+		// on spikes. Clear later in volume-processing code
+		//INTCON3bits.INT2IF = 0;
+	}		
 }
 
 // Pick-up high-priority interrupts
@@ -131,6 +162,7 @@ static void init(void)
 	PORTA = 0; TRISA = 0xFF; // A all inputs
 	ADCON0 = 0; ANCON0 = 0xFF; ANCON1 = 0x1F; // disable AD converter, all digital IO
 	
+	
 	// PORTB: use all-input config, use open-drain output style
 	// The I2C pins must also be configured in input mode.
 	PORTB = 0; TRISB = 0xFF; // B all inputs
@@ -138,6 +170,19 @@ static void init(void)
 	
 	// PORTC: all input except 7
 	PORTC = 0x80; TRISC = 0x7F;
+	
+	// setup the remappable peripheral inputs:
+	// Clear IOLOCK
+	EECON2 = 0x55;
+	EECON2 = 0xAA;
+	PPSCONbits.IOLOCK = 0;
+	RPINR1 = 0; // IRserial -> RA0 -> RP0 -> INT1
+	RPINR2 = 1; // VolA     -> RA1 -> RP1 -> INT2
+	RPINR3 = 2; // SelectB  -> RA5 -> RP2 -> INT3
+	// Set IOLOCK
+	EECON2 = 0x55;
+	EECON2 = 0xAA;
+	PPSCONbits.IOLOCK = 1;
 	
 	// setup I2C peripheral
 	SSP1CON1 = 0x28; // enable I2C master mode
@@ -155,8 +200,9 @@ static void init(void)
 	IPR3bits.TMR4IP = 1; // high priority interrupt
 	PIE3bits.TMR4IE = 1;
 	
-	// Globally enable interrupts
-	RCONbits.IPEN = 1;
-	INTCONbits.GIEH = 1;
-	INTCONbits.GIEL = 1;
+	// PortA (through PPS) interrupt enables
+	INTCON2bits.INTEDG1 = !VolA;
+	INTCON3bits.INT2IF = 0;
+	INTCON3bits.INT2IP = 0;
+	INTCON3bits.INT2IE = 1; // VolA
 }	
