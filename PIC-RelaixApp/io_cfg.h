@@ -65,4 +65,3 @@
 // RC4&5 are reserved for the USB port
 // RB6&7 are reserved for the ICSP (Debug/Program) port
 // RB4&5 are reserved for the I2C interface to the relay board
-
