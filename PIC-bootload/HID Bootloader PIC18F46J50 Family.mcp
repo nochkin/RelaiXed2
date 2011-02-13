@@ -8,9 +8,9 @@ dir_src=
 dir_bin=
 dir_tmp=
 dir_sin=
-dir_inc=D:\Program Files\Microchip\MCC18\h
-dir_lib=D:Program Files\Microchip\MCC18\lib
-dir_lkr=C:\MCC18\lkr
+dir_inc=D:\Program Files (x86)\Microchip\mplabc18\v3.37.01\h
+dir_lib=D:\Program Files (x86)\Microchip\mplabc18\v3.37.01\lib
+dir_lkr=
 [CAT_FILTERS]
 filter_src=*.asm;*.c
 filter_inc=*.h;*.inc
