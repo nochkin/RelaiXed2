@@ -262,8 +262,13 @@ void ProcessBootLoad(void)
 			mLED_5_On()
 			mLED_6_On()
 			mLED_7_On()
+#ifdef UseIPEN
+			// We chose low-priority interrupts for USB
 			INTCONbits.GIEL = 1;
-		}	
+#else
+			INTCONbits.GIE = 1;
+#endif
+		}
 
 		//Sleep(); // wait for interupt
 	}

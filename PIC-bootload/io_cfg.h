@@ -213,6 +213,9 @@
 #define mClrLogMode         (PIR3bits.CTMUIF = 0)
 #define mGetLogMode         PIR3bits.CTMUIF
 
+#define UseIPEN
+#define IPEN_value			1
+
 #define LEDright            PORTCbits.RC7
 #define mInitAllLEDs()      TRISB = 0xFF; TRISC = 0x7F; PORTB = 0; PORTC = 0x80; // led-drivers are 'opendrain'
 // individual LEDs of right segment, in order of segmentled a, b, c, ...
