@@ -28,6 +28,10 @@
 // Note that I/O directions, to be set by *TRIS* bits,
 // are already initialized by the RelaiXed  bootloader.
 
+// The use of IPEN must correspond to its value in the bootloader
+#define UseIPEN
+#define IPENvalue 1
+
 #define mLED_1              TRISBbits.TRISB2
 #define mLED_2              TRISBbits.TRISB0
 #define mLED_3              TRISCbits.TRISC1

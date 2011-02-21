@@ -54,12 +54,12 @@ LIBPATH .
 
 #IFDEF _CRUNTIME
   #IFDEF _EXTENDEDMODE
-    FILES c018i_e.o		//Manually including a modified version of the contents of this file in the main.c file instead
+    FILES c018i_e.o
     FILES clib_e.lib
     FILES p18f25j50_e.lib
 
   #ELSE
-    FILES c018i.o			//Manually including a modified version of the contents of this file in the main.c file instead
+    FILES c018i.o
     FILES clib.lib
     FILES p18f25j50.lib
   #FI

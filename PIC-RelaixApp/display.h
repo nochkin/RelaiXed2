@@ -5,7 +5,7 @@
  *****************************************************************************/
 #include "typedefs.h"
 
-extern byte display_cnt; // increments on every display refresh (is at 160Hz)
+extern volatile byte display_cnt; // increments on every display refresh (is at 160Hz)
 
 #define DIGIT_A     10
 #define DIGIT_B     11
@@ -19,3 +19,6 @@ extern byte display_cnt; // increments on every display refresh (is at 160Hz)
 
 extern void display_isr(void);
 extern void display_set(byte digit_hi, byte digit_lo);
+extern void display_set_alt( byte digit_hi, byte digit_lo,
+							byte duration);
+

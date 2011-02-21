@@ -46,6 +46,7 @@ static void init(void);
 // Normal operation. Built hex image should be inserted by bootloader
 #define ISR_HI 0x2008
 #define ISR_LO 0x2018
+
 // JvE: pragmas for bootloader addressing made
 // according to MPASM&MPLINK manual, chapter 13.5
 // The 'reset' jumps into the real 'main', not a device init function.
@@ -56,34 +57,52 @@ void app_start(void)
 }
 #endif
 
-// high-priority interrupt vector:
+// high-priority interrupt vector: (global interrupt vector if IPEN is clear)
 #pragma code app_isr_hi = ISR_HI
 void app_interrupt_at_high_vector(void)
 {
 	_asm goto app_isr_high _endasm	
 }
 
-// low-priority interrupt vector:
+// low-priority interrupt vector: (not used if IPEN is clear)
 #pragma code app_isr_lo = ISR_LO
 void app_interrupt_at_low_vector(void)
 {
+#ifdef UseIPEN
 	_asm goto app_isr_low _endasm
+#else
+	_asm goto app_isr_high _endasm	
+#endif
 }
+
+BOOL prev_usb_bus_sense;
 
 #pragma code
 void main(void)
 {
 	unsigned int i;
 	char usb_char;
-	//const char usb_msg[] = {'l', 'o', 'g'};
+	const char init_msg[] = {'I', 'N', 'I', 'T'};
 	
 	init();
+	display_cnt = 0;
+	display_set( 0x00, 0x00);
+	display_set_alt( 0x00, 0x00, 0x00);
 	amp_state_init();
-		
+
 	// Globally enable interrupts
-	RCONbits.IPEN = 1;
+#ifdef UseIPEN
 	INTCONbits.GIEH = 1;
 	INTCONbits.GIEL = 1;
+#else
+	INTCONbits.PEIE = 1;
+	INTCONbits.GIE = 1;
+#endif
+
+	// (re-)launch USB activity
+	prev_usb_bus_sense = 0;
+	check_usb_power();
+	usb_write( init_msg, (byte)4);
 	
 	while (1)
 	{
@@ -92,14 +111,10 @@ void main(void)
 			
 		usb_char = usb_state();
 				
-		if (display_cnt < 0x80)
-			display_set( DIGIT_C, usb_char);
-		else
-		    display_set( DIGIT_minus, usb_char);
+		display_set( DIGIT_C, usb_char);
 
 		if (INTCON3bits.INT2IF)
 			volume_update();
-		//usb_write(usb_msg, (byte)3);
 		
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
 		check_usb_power();
@@ -108,8 +123,6 @@ void main(void)
 
 void check_usb_power(void)
 {
-	static BOOL prev_usb_bus_sense = 0;
-	
 	if (HasUSB != prev_usb_bus_sense)
 	{
 		PIR2bits.USBIF = 1; // enter USB code through interrupt
@@ -117,47 +130,69 @@ void check_usb_power(void)
 	}	
 }	
 
-// Pick-up low-priority interrupts
-#pragma interruptlow app_isr_low
-void app_isr_low(void)
-{
-	char vol_msg[] = {'V', '0', '0', '0'};
-	
-	if (PIE2bits.USBIE && PIR2bits.USBIF)
-	{
-		PIR2bits.USBIF = 0;
-	}
-	
-	if (INTCON3bits.INT2IE && INTCON3bits.INT2IF)
-	{   // edge on VolA input: check edge-direction of VolA against VolB valua:
-		INTCON3bits.INT2IE = 0;
-		
-		if (INTCON2bits.INTEDG1 == VolB)
-			volume_incr -= 1;
-		else
-			volume_incr += 1;
-
-		//vol_msg[1] = VolA ? '1' : '0';
-		//vol_msg[2] = VolB ? '1' : '0';
-		//vol_msg[3] = INTCON2bits.INTEDG1 ? '1' : '0';
-		//usb_write(vol_msg, (byte)4);
-		
-		// do not yet clear INTCON3bits.INT2IF: wait some cycles to reduce sensitivity
-		// on spikes. Clear later in volume-processing code
-		//INTCON3bits.INT2IF = 0;
-	}		
-}
-
-// Pick-up high-priority interrupts
+// Pick-up high-priority interrupts (or global interrupts if IPEN is clear)
 #pragma interrupt app_isr_high
 void app_isr_high(void)
 {
 	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
+	{
 		display_isr();
+		PIR3bits.TMR4IF = 0;
+	}
+#ifdef UseIPEN
+}
+
+// Pick-up low-priority interrupts
+
+#pragma interruptlow app_isr_low
+void app_isr_low(void)
+{
+	// The PIC hardware will clear the 'GIEL' bit upon entering this isr.
+	// With our boot-loader in place, that will happen already there.
+	// The bootloader will take care of the USB interrupt PIR2bits.USBIF.
+#endif
+
+	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
+	{
+		display_isr();
+		PIR3bits.TMR4IF = 0;
+	}
+	if (INTCON3bits.INT2IE && INTCON3bits.INT2IF)
+	{   // edge on VolA input: check edge-direction of VolA against VolB value:
+		if (INTCON2bits.INTEDG2 == VolB)
+			volume_incr -= 1;
+		else
+			volume_incr += 1;
+		
+		// do not yet clear INTCON3bits.INT2IF: wait some cycles to reduce sensitivity
+		// on spikes. Clear later in volume-processing code
+		//INTCON3bits.INT2IF = 0;
+		INTCON3bits.INT2IE = 0; // return from isr with volume interrupt disabled
+	}
+ 	// The 'return from interruptlow' instruction will set the GIEL bit again	
 }
 
 static void init(void)
 {
+	// Reset some things, which aren't reset from USB command
+	RCONbits.IPEN = IPENvalue; // enable interrupt priority mechanism
+	INTCON = 0; // disable all interrupts for now
+	INTCON2 = 0xFF;
+	INTCON3 = 0;
+	PIE1 = 0;
+	PIE2 = 0;
+	PIE3 = 0;
+	PIR1 = 0;
+ 	PIR2 &= 0x10; // don't touch pending USB interrupt flag
+	PIR3 = 0;
+	IPR1 = 0;
+	IPR2 = 0;
+	IPR3 = 0;
+
+#ifndef __DEBUG
+	PIE2bits.USBIE = 1;  // allow USB interrupts
+#endif
+
 	// PORTA: all inputs, no interrupt-on-change facility :-(...
 	PORTA = 0; TRISA = 0xFF; // A all inputs
 	ADCON0 = 0; ANCON0 = 0xFF; ANCON1 = 0x1F; // disable AD converter, all digital IO
@@ -198,10 +233,11 @@ static void init(void)
 	// hmm... measure as 2x91.5509 Hz
 	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
 	IPR3bits.TMR4IP = 1; // high priority interrupt
+	//IPR3bits.TMR4IP = 0; // low priority interrupt
 	PIE3bits.TMR4IE = 1;
 	
 	// PortA (through PPS) interrupt enables
-	INTCON2bits.INTEDG1 = !VolA;
+	INTCON2bits.INTEDG2 = 1; //!VolA;
 	INTCON3bits.INT2IF = 0;
 	INTCON3bits.INT2IP = 0;
 	INTCON3bits.INT2IE = 1; // VolA

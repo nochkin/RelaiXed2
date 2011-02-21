@@ -202,8 +202,13 @@ void main(void)
     
     UIE = 0x3f;          // allow sensible USB interrupts
 	PIE2bits.USBIE  = 1; // allow USB interrupts
+#ifdef UseIPEN
 	INTCONbits.GIEL = 1; // allow all low-priority interrupts (among which the USB interrupts)
 	INTCONbits.GIEH = 1; // also allow high-priority interrupts (prerequisite for low-priority ints)
+#else
+	INTCONbits.GIE = 1;  // Allow all interrupts
+	INTCONbits.PEIE = 1; // including the USB device interrupts
+#endif
 	_asm
 		goto ProgramMemStart			// Assume the user app has its own main loop.
 	_endasm
@@ -312,7 +317,9 @@ static void InitializeSystem(void)
     tris_self_power = INPUT_PIN;
     #endif
     
-    RCONbits.IPEN  = 1; // enable the interrupt priority feature
+// JvE: Hmmm... I would like to use the IPEN mode, but it seems to me impossible
+// to use that reliably, because the device has just a single-entry 'fast return stack'.
+    RCONbits.IPEN  = IPEN_value; // enable the interrupt priority feature
     IPR2bits.USBIP = 0; // low priority USB interrupts
 	PIE2bits.USBIE = 0; // not yet allow USB interrupts
 	

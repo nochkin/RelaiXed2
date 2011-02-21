@@ -23,14 +23,14 @@ void app_start(void)
 	_asm goto app_main _endasm	
 }
 
-// high-priority interrupt vector:
+// high-priority interrupt vector: (or global vector if IPEN is clear)
 #pragma code app_isr_hi=0x2008
 void app_interrupt_at_high_vector(void)
 {
 	_asm goto app_isr_high _endasm	
 }
 
-// low-priority interrupt vector:
+// low-priority interrupt vector: (unused if IPEN is clear)
 #pragma code app_isr_lo=0x2018
 void app_interrupt_at_low_vector(void)
 {

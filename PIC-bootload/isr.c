@@ -31,13 +31,19 @@ void BootLoadIsr(void);
 extern byte usb_active_cfg;
 
 // high-priority interrupt vector:
+// or global interrupt vector in case IPEN is not set
 #pragma code high_vector=0x08
 void interrupt_at_high_vector(void)
 {
+#ifdef UseIPEN
+	// with IPEN, high-priority is only used by the uploaded application
 	_asm goto ProgramMemStart+0x0008 _endasm
+#else
+	_asm goto BootLoadIsr _endasm
+#endif
 }
 
-// low-priority interrupt vector:
+// low-priority interrupt vector: (not used if IPEN is clear)
 #pragma code low_vector=0x18
 void interrupt_at_low_vector(void)
 {
@@ -50,7 +56,11 @@ void interrupt_at_low_vector(void)
  * but is now activated through the USBIF interrupt
  *****************************************************************************/
 #pragma code
+#ifdef UseIPEN
 #pragma interruptlow BootLoadIsr
+#else
+#pragma interrupt BootLoadIsr
+#endif
 void BootLoadIsr(void)
 {
 	// The PIC hardware will clear the 'GIEL' bit upon entering this isr.
