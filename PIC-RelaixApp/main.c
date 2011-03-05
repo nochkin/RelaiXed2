@@ -35,7 +35,8 @@ void app_isr_high(void);
 void app_isr_low(void);
 void main(void);
 void check_usb_power(void);
-static void init(void);               
+static void init(void);
+      
 
 #ifdef __DEBUG
 // Don't use my bootloader USB stack: the MPLAB debugger doesn't understand that.
@@ -74,10 +75,12 @@ void app_interrupt_at_low_vector(void)
 	_asm goto app_isr_high _endasm	
 #endif
 }
-
-BOOL prev_usb_bus_sense;
-
 #pragma code
+// back to normal code allocation
+
+static BOOL prev_usb_bus_sense;
+static int volume_tick;
+
 void main(void)
 {
 	unsigned int i;
@@ -86,6 +89,7 @@ void main(void)
 	
 	init();
 	display_cnt = 0;
+    volume_tick = 0;
 	display_set( 0x00, 0x00);
 	display_set_alt( 0x00, 0x00, 0x00);
 	amp_state_init();
@@ -101,19 +105,11 @@ void main(void)
 
 	// (re-)launch USB activity
 	prev_usb_bus_sense = 0;
-	check_usb_power();
 	usb_write( init_msg, (byte)4);
 	
 	while (1)
 	{
-		for (i=0; i<64000; i++)
-			;
-			
-		usb_char = usb_state();
-				
-		display_set( DIGIT_C, usb_char);
-
-		if (INTCON3bits.INT2IF)
+		if (volume_incr)
 			volume_update();
 		
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
@@ -127,6 +123,8 @@ void check_usb_power(void)
 	{
 		PIR2bits.USBIF = 1; // enter USB code through interrupt
 		prev_usb_bus_sense = HasUSB;
+
+		display_set_alt( DIGIT_U, (HasUSB ? 1 : 0), 4);
 	}	
 }	
 
@@ -134,11 +132,31 @@ void check_usb_power(void)
 #pragma interrupt app_isr_high
 void app_isr_high(void)
 {
+
 	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
 	{
 		display_isr();
+		if (volume_tick)
+			volume_tick--;
+
 		PIR3bits.TMR4IF = 0;
 	}
+
+	if (INTCON3bits.INT2IE && INTCON3bits.INT2IF)
+	{   // edge on VolA input: check edge-direction of VolA against VolB value:
+		if (volume_tick == 0)
+		{
+			if (INTCON2bits.INTEDG2 == VolB)
+				volume_incr -= 1;
+			else
+				volume_incr += 1;
+		
+        	volume_tick = 10; // create delay
+		}
+		INTCON2bits.INTEDG2 = !VolA;
+		INTCON3bits.INT2IF = 0;
+	}
+
 #ifdef UseIPEN
 }
 
@@ -150,26 +168,10 @@ void app_isr_low(void)
 	// The PIC hardware will clear the 'GIEL' bit upon entering this isr.
 	// With our boot-loader in place, that will happen already there.
 	// The bootloader will take care of the USB interrupt PIR2bits.USBIF.
+
 #endif
 
-	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
-	{
-		display_isr();
-		PIR3bits.TMR4IF = 0;
-	}
-	if (INTCON3bits.INT2IE && INTCON3bits.INT2IF)
-	{   // edge on VolA input: check edge-direction of VolA against VolB value:
-		if (INTCON2bits.INTEDG2 == VolB)
-			volume_incr -= 1;
-		else
-			volume_incr += 1;
-		
-		// do not yet clear INTCON3bits.INT2IF: wait some cycles to reduce sensitivity
-		// on spikes. Clear later in volume-processing code
-		//INTCON3bits.INT2IF = 0;
-		INTCON3bits.INT2IE = 0; // return from isr with volume interrupt disabled
-	}
- 	// The 'return from interruptlow' instruction will set the GIEL bit again	
+ 	// The 'return from interruptlow' instruction will set the GIEL bit again
 }
 
 static void init(void)
@@ -236,9 +238,9 @@ static void init(void)
 	//IPR3bits.TMR4IP = 0; // low priority interrupt
 	PIE3bits.TMR4IE = 1;
 	
-	// PortA (through PPS) interrupt enables
+	// Volume rotary interrupt enable (on PortA, through PPS)
 	INTCON2bits.INTEDG2 = 1; //!VolA;
 	INTCON3bits.INT2IF = 0;
-	INTCON3bits.INT2IP = 0;
+	INTCON3bits.INT2IP = 1;
 	INTCON3bits.INT2IE = 1; // VolA
 }	

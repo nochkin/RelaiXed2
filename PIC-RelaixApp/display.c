@@ -16,12 +16,13 @@ static byte alt_display_cnt;
 /* segment-table: bits [3:0] are for PORTC[3:0],
  * bits [6:4] are moved to PORTB[2:0].
  */
-static rom char segment_table[] = {
+static rom near char segment_table[] = {
 	8, 94, 34, 66, 84, 65, 1, 90, 0, 64, /* '0' - '9' */
 	16, 5, 41, 6, 33, 49, /* 'A' - 'F' */
 	119 /* '-' */,
-	48 /* 'P' */,
-	127 /* ' ' */
+	48  /* 'P' */,
+	127 /* ' ' */,
+	12  /* 'U' */
 };
 
 // Display refresh, called from isr on TMR4 wraparound, at 153Hz rate
@@ -32,11 +33,13 @@ void display_isr(void)
 
 	/* choose which segment to display */
 	inx = 0;
-	inx += (display_cnt & 0x01); // for even cnts, show lower (right) segment
-	if (alt_display_cnt != 0 && display_cnt >= 0x80)
+	if (display_cnt & 0x01)
+		inx++; // for even cnts, show lower (right) segment
+
+	if (alt_display_cnt != 0 && (display_cnt & 0x80))
 	{
 		inx += 2;
-		if (alt_display_cnt != 0xff && display_cnt == 0)
+		if (alt_display_cnt != 0xff && display_cnt == 0x80)
 			alt_display_cnt--;
 	}
 

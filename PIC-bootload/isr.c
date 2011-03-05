@@ -56,11 +56,10 @@ void interrupt_at_low_vector(void)
  * but is now activated through the USBIF interrupt
  *****************************************************************************/
 #pragma code
+
+// When using dual-priority feature (UseIPEN), the USB interrupts are low-priority
 #ifdef UseIPEN
 #pragma interruptlow BootLoadIsr
-#else
-#pragma interrupt BootLoadIsr
-#endif
 void BootLoadIsr(void)
 {
 	// The PIC hardware will clear the 'GIEL' bit upon entering this isr.
@@ -75,6 +74,22 @@ void BootLoadIsr(void)
  	}
  	// The 'return from interruptlow' instruction will set the GIEL bit again
 }
+#else
+#pragma interrupt BootLoadIsr
+void BootLoadIsr(void)
+{
+	if (PIR2bits.USBIF && PIE2bits.USBIE)
+	{
+		USBSubSystem();
+	}
+	else
+	{
+    	_asm goto ProgramMemStart+0x0008 _endasm
+    	// return-from-isr is done in application program
+ 	}
+ 	// The 'return from interruptlow' instruction will set the GIEL bit again
+}
+#endif
 
 void USBSubSystem(void)
 {
