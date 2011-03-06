@@ -79,7 +79,7 @@ void app_interrupt_at_low_vector(void)
 // back to normal code allocation
 
 static BOOL prev_usb_bus_sense;
-static int volume_tick;
+static int volume_tick, usb_tick, chan_tick;
 
 void main(void)
 {
@@ -90,6 +90,8 @@ void main(void)
 	init();
 	display_cnt = 0;
     volume_tick = 0;
+	chan_tick = 0;
+	usb_tick = 0;
 	display_set( 0x00, 0x00);
 	display_set_alt( 0x00, 0x00, 0x00);
 	amp_state_init();
@@ -111,6 +113,9 @@ void main(void)
 	{
 		if (volume_incr)
 			volume_update();
+
+		if (channel_incr)
+			channel_update();
 		
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
 		check_usb_power();
@@ -119,13 +124,17 @@ void main(void)
 
 void check_usb_power(void)
 {
-	if (HasUSB != prev_usb_bus_sense)
-	{
-		PIR2bits.USBIF = 1; // enter USB code through interrupt
-		prev_usb_bus_sense = HasUSB;
+	if (HasUSB == prev_usb_bus_sense)
+		usb_tick = 0;
+	else
+		usb_tick++;
 
-		display_set_alt( DIGIT_U, (HasUSB ? 1 : 0), 4);
-	}	
+	if (usb_tick == 0xFF)
+	{
+		prev_usb_bus_sense = HasUSB;
+		display_set_alt( DIGIT_U, (HasUSB ? 1 : 0), 3);
+		PIR2bits.USBIF = 1; // enter USB code through interrupt
+	}
 }	
 
 // Pick-up high-priority interrupts (or global interrupts if IPEN is clear)
@@ -139,6 +148,9 @@ void app_isr_high(void)
 		if (volume_tick)
 			volume_tick--;
 
+		if (chan_tick)
+			chan_tick--;
+
 		PIR3bits.TMR4IF = 0;
 	}
 
@@ -151,11 +163,22 @@ void app_isr_high(void)
 			else
 				volume_incr += 1;
 		
-        	volume_tick = 10; // create delay
+        	volume_tick = 2; // create delay
 		}
 		INTCON2bits.INTEDG2 = !VolA;
 		INTCON3bits.INT2IF = 0;
 	}
+
+	if (INTCON3bits.INT3IE && INTCON3bits.INT3IF)
+	{
+		if (chan_tick == 0)
+		{
+			channel_incr = 1;
+			chan_tick = 10;
+		}
+		INTCON3bits.INT3IF = 0;
+	}
+
 
 #ifdef UseIPEN
 }
@@ -198,6 +221,8 @@ static void init(void)
 	// PORTA: all inputs, no interrupt-on-change facility :-(...
 	PORTA = 0; TRISA = 0xFF; // A all inputs
 	ADCON0 = 0; ANCON0 = 0xFF; ANCON1 = 0x1F; // disable AD converter, all digital IO
+	//CMCON = 0x07; // disable analog comparators on PortA
+	//CM1CON = 0x07;
 	
 	
 	// PORTB: use all-input config, use open-drain output style
@@ -239,8 +264,14 @@ static void init(void)
 	PIE3bits.TMR4IE = 1;
 	
 	// Volume rotary interrupt enable (on PortA, through PPS)
-	INTCON2bits.INTEDG2 = 1; //!VolA;
+	INTCON2bits.INTEDG2 = !VolA;
 	INTCON3bits.INT2IF = 0;
 	INTCON3bits.INT2IP = 1;
-	INTCON3bits.INT2IE = 1; // VolA
+	INTCON3bits.INT2IE = 1;
+
+	// SelectB input: interrupt on falling edge for channel select increment
+	INTCON2bits.INTEDG3 = 0; //falling
+	INTCON3bits.INT3IF = 0;
+	INTCON2bits.INT3IP = 1;
+	INTCON3bits.INT3IE = 1;
 }	
