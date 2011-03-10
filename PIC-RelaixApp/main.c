@@ -178,8 +178,6 @@ void app_isr_high(void)
 		}
 		INTCON3bits.INT3IF = 0;
 	}
-
-
 #ifdef UseIPEN
 }
 
