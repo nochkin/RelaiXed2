@@ -57,6 +57,7 @@
 #define MY_DEVICE_ID  "Vid_04d8&Pid_fb29"	
 
 //*********************** BOOTLOADER COMMANDS ******************************
+#define READ_HEXFILE                0x01
 #define QUERY_DEVICE				0x02
 #define UNLOCK_CONFIG				0x03
 #define ERASE_DEVICE				0x04
@@ -139,6 +140,7 @@
 #define BOOTLOADER_UNLOCK_CONFIG	0x05
 #define BOOTLOADER_RESET			0x06
 #define BOOTLOADER_LOG              0x07
+#define BOOTLOADER_READHEX			0x08
 //**************************************************************************
 
 //*********************** RESET RESULTS ************************************
@@ -537,6 +539,11 @@ namespace HIDBootLoader {
 		HANDLE ReadHandleToMyDevice;
 		HANDLE AsyncReadHandleToMyDevice;
 
+		// JvE: keep track of programming of memory regions: print as user feedback
+		static unsigned int *memRegionIndexDone;
+		volatile int memRegionIndexBusy;
+		volatile int memRegionIndexShown;
+
 		volatile unsigned int LogReadInx;
 		volatile unsigned int LogDisplayInx;
 
@@ -587,7 +594,7 @@ namespace HIDBootLoader {
 			//Create a new set of memory regions and an array of pointers
 			//	to what will become the allocated memory for memory space
 			memoryRegions = new MEMORY_REGION[MAX_DATA_REGIONS];
-
+			memRegionIndexDone = new unsigned int[MAX_DATA_REGIONS];
 			//pData = new unsigned char*[MAX_DATA_REGIONS];
 			memoryRegionsDetected = 0;
 
@@ -1372,7 +1379,7 @@ namespace HIDBootLoader {
 			WriteFile(WriteHandleToMyDevice,myCommand.RawData, 65, &BytesWritten, 0);
 			CloseHandle(WriteHandleToMyDevice);
 
-			LogThreadResults == LOG_IDLE;
+			LogThreadResults = LOG_IDLE;
 			// end of thread life
 			return;
 		}
@@ -1405,7 +1412,7 @@ namespace HIDBootLoader {
 		***************************************************************************/
 		private: System::Void ckbox_ConfigWordProgramming_CheckedChanged(System::Object^  sender, System::EventArgs^  e) 
 		{
-			listBox1->Items->Clear();
+			//listBox1->Items->Clear();
 
 			if(ckbox_ConfigWordProgramming->Checked)
 			{
@@ -1584,9 +1591,9 @@ namespace HIDBootLoader {
 			ReadThreadResults = PROGRAM_RUNNING;
 
 			//If we are in not in debugging mode then clear the status box
-			#if !defined(DEBUGGING)
-				listBox1->Items->Clear();
-			#endif
+			//#if !defined(DEBUGGING)
+			//	listBox1->Items->Clear();
+			//#endif
 
 			ENABLE_PRINT();
 
@@ -2895,9 +2902,9 @@ namespace HIDBootLoader {
 			}
 
 			//If we are in not in debugging mode then clear the status box
-			#if !defined(DEBUGGING)
-				listBox1->Items->Clear();
-			#endif
+			//#if !defined(DEBUGGING)
+			//	listBox1->Items->Clear();
+			//#endif
 
 			ENABLE_PRINT();
 
@@ -2954,6 +2961,8 @@ namespace HIDBootLoader {
 			bool hexFileEOF;
 
 			DisableButtons();
+			bootloaderState = BOOTLOADER_READHEX;
+			ReadThreadResults = READ_IDLE;
 
 			//Create a new instance of a OpenFileDialog box
 			OpenFileDialog^ openFileDialog1 = gcnew OpenFileDialog;
@@ -3019,6 +3028,8 @@ namespace HIDBootLoader {
 					//Initially indicate that we haven't reached the end of file
 					hexFileEOF = false;
 
+					ENABLE_PRINT();
+					ReadThreadResults = READ_RUNNING;
 					//Start to read the file by reading a new line
 					while ((fileSupportBuffer = fileSupportStreamReader->ReadLine()) && (hexFileEOF == false))
 					{
@@ -3244,6 +3255,7 @@ namespace HIDBootLoader {
 					}
 
 					DEBUG_OUT("Loading Hex File Complete");
+					ReadThreadResults = READ_SUCCESS;
 
 					//If the hex file completed successfully, then enable any buttons
 					//  that are valid now that we have loaded data.
@@ -3258,11 +3270,13 @@ namespace HIDBootLoader {
 				else
 				{
 					DEBUG_OUT("---- Couldn't read the specified hex file ----");
+					ReadThreadResults = READ_READ_FILE_FAILED;
 				}
 			}
 			else
 			{
-			DEBUG_OUT("---- Open hex file terminated ----");
+				DEBUG_OUT("---- Open hex file terminated ----");
+				ReadThreadResults = READ_READ_FILE_FAILED;
 			}
 
 			try
@@ -3530,9 +3544,9 @@ namespace HIDBootLoader {
 			}
 
 			//If we are in not in debugging mode then clear the status box
-			#if !defined(DEBUGGING)
-				listBox1->Items->Clear();
-			#endif
+			//#if !defined(DEBUGGING)
+			//	listBox1->Items->Clear();
+			//#endif
 
 			//Allow the bootloader main thread to print a message regarding the
 			//  start of the programming sequence
@@ -3753,6 +3767,8 @@ namespace HIDBootLoader {
 				//  a message to the status box and change the state of the 
 				//  programming thread to indicate that it is now programming
 				//  the device.
+				memRegionIndexBusy = 0;
+				memRegionIndexShown = 0;
 				ENABLE_PRINT();
 				ProgramThreadResults = PROGRAM_RUNNING_PROGRAM;
 
@@ -3808,6 +3824,9 @@ namespace HIDBootLoader {
 						address = memoryRegions[currentMemoryRegion].Address;
 						size = memoryRegions[currentMemoryRegion].Size;
 						p = getMemoryRegion(currentMemoryRegion);
+
+						// JvE: show current programming region in status window
+			            memRegionIndexDone[memRegionIndexBusy++] = currentMemoryRegion;
 
 						//Mark that we intend to skip the first block unless we find a non-0xFF
 						//  byte in the packet
@@ -4379,7 +4398,7 @@ namespace HIDBootLoader {
 
 			deviceAttached = true;
 
-			listBox1->Items->Clear();
+			//listBox1->Items->Clear();
 			ENABLE_PRINT();
 			PRINT_STATUS("Device attached.");
 
@@ -4434,9 +4453,9 @@ namespace HIDBootLoader {
 			  {
 				  unsigned char i;
 
-				  #if !defined(DEBUGGING)
-					listBox1->Items->Clear();
-				  #endif
+				  //#if !defined(DEBUGGING)
+				  //   listBox1->Items->Clear();
+				  //#endif
 
 				  if(deviceAttached == true)
 				  {
@@ -4513,7 +4532,7 @@ namespace HIDBootLoader {
 		{
 			DEBUG_OUT(">>btn_ResetDevice Pressed");
 
-			listBox1->Items->Clear();
+			//listBox1->Items->Clear();
 			DisableButtons();
 
 			#if !defined(ENCRYPTED_BOOTLOADER)
@@ -4828,6 +4847,38 @@ namespace HIDBootLoader {
 					break;
 
 				/*****************************************************/
+				/*************** BOOTLOADER READ HEX FILE ************/
+				/*****************************************************/
+				case BOOTLOADER_READHEX:
+					switch(ReadThreadResults)
+					{
+					    case READ_IDLE:
+						case READ_RUNNING:
+							PRINT_STATUS("Reading Hex file");
+							break;
+
+						case READ_SUCCESS:
+							//If the read is complete then notify the user
+							ENABLE_PRINT();
+							PRINT_STATUS("Reading Hex file Complete");
+							bootloaderState = BOOTLOADER_IDLE;
+							ReadThreadResults = READ_IDLE;
+							//enable the export hex button, since we now have
+							//  information that could be exported
+							btn_ExportHex_restore = true;
+							break;
+						case READ_READ_FILE_FAILED:
+						default:
+							//If the read is complete then notify the user
+							ENABLE_PRINT();
+							PRINT_STATUS("Reading Hex file Failed");
+							progressBar_Status->Value = 100;
+							bootloaderState = BOOTLOADER_IDLE;
+							ReadThreadResults = READ_IDLE;
+					}	
+					break;
+
+				/*****************************************************/
 				/*************** BOOTLOADER READ *********************/
 				/*****************************************************/
 				case BOOTLOADER_READ:
@@ -4980,6 +5031,18 @@ namespace HIDBootLoader {
 							}
 							//say that the programming sequence is running
 							PRINT_STATUS("Programming Started");
+
+							// JvE: provide status feedback on the programmed memory regions
+							while (memRegionIndexBusy > memRegionIndexShown)
+							{
+								String^ s;
+							    s = "Region";
+								s=String::Concat(s, " Address=0x", HexToString(memoryRegions[memRegionIndexShown].Address, 3));
+								s=String::Concat(s, " Size=0x", HexToString(memoryRegions[memRegionIndexShown].Size, 3));
+								ENABLE_PRINT();
+								PRINT_STATUS(s)
+								memRegionIndexShown++;
+							}
 							break;
 
 						case PROGRAM_SUCCESS:
