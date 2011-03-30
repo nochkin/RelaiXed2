@@ -13,8 +13,8 @@ byte display_cnt; // increments on every display refresh (is at 160Hz)
 static byte segment_data[4];
 static byte alt_display_cnt;
 
-/* segment-table: bits [3:0] are for PORTC[3:0],
- * bits [6:4] are moved to PORTB[2:0].
+/* segment-table: bits [3:0] are for PORTB[3:0],
+ * bits [6:4] are moved to PORTC[2:0].
  */
 static rom near char segment_table[] = {
 	8, 94, 34, 66, 84, 65, 1, 90, 0, 64, /* '0' - '9' */
@@ -53,8 +53,8 @@ void display_isr(void)
 	segment = segment_data[inx];
 	
 	/* drive LED segments (selected TRIS bits to '0') */
-	TRISB &= segment & 0x0F;
-	TRISC &= (segment >> 4);
+	TRISB &= segment | 0xF0;
+	TRISC &= (segment >> 4) | 0xF8;
 	PORTB &= 0xF0;
 	PORTC &= 0xF8;
 }

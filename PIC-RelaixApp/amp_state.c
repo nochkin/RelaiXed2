@@ -8,6 +8,7 @@
 #include "amp_state.h"
 #include "usb_io.h"
 #include "display.h"
+#include "relays.h"
  
 volatile char volume_incr; // modified from isr
 static char master_volume;
@@ -15,6 +16,8 @@ static byte volume_x2;
 
 volatile char channel_incr;
 static byte channel;
+
+static char power;
 
 // Input selection channels: numbered 0 .. 5
 #define NCHANNELS 6
@@ -24,7 +27,8 @@ void amp_state_init(void)
 	volume_incr = 0;
 	master_volume = 0;
 	volume_x2 = 0;
-	channel = 0;
+	channel = 1;
+	power = 1;
 }	
  
 void volume_update(void)
@@ -60,6 +64,8 @@ void volume_update(void)
 	//if (master_volume < 0) master_volume = 0;
 	//else if (master_volume > 64) master_volume = 64;
 	
+	set_relays(0x00, power, channel, master_volume, master_volume);
+	
 	vol_div_10 = 0;
 	for (vol_by_10 = 10; vol_by_10 <= master_volume; vol_by_10 += 10)
 		vol_div_10++;
@@ -88,10 +94,12 @@ void channel_update(void)
 	channel += channel_incr;
 	channel_incr = 0;
 
-	while (channel > 5)
+	while (channel > 6)
 		channel -= 6;
 
-	display_set_alt( DIGIT_C, (channel+1), 2); // repeat channel-display twice
+	set_relays(0x00, power, channel, master_volume, master_volume);
+
+	display_set_alt( DIGIT_C, channel, 2); // repeat channel-display twice
 
 	usb_write( chan_msg, (byte)3); // three-char message
 }
