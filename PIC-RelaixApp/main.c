@@ -20,15 +20,17 @@
 #pragma config WPFP = PAGE_1        //Write Protect Program Flash Page 0
 #pragma config WPEND = PAGE_0       //Start protection at page 0
 #pragma config WPCFG = OFF          //Write/Erase last page protect Disabled
-#pragma config WPDIS = OFF          //WPFP[5:0], WPEND, and WPCFG bits ignored 
+#pragma config WPDIS = OFF          //WPFP[5:0], WPEND, and WPCFG bits ignored
 
 
 #include <p18cxxx.h>
+#include <i2c.h>
 #include "typedefs.h"                   
 #include "io_cfg.h"
 #include "display.h"
 #include "usb_io.h"
 #include "amp_state.h"
+#include "relays.h"
 
 // Forward declarations
 void app_isr_high(void);
@@ -36,27 +38,26 @@ void app_isr_low(void);
 void main(void);
 void check_usb_power(void);
 static void init(void);
-      
 
 #ifdef __DEBUG
-// Don't use my bootloader USB stack: the MPLAB debugger doesn't understand that.
-// This debug image can be uploaded by the debugger/programmer
-#define ISR_HI 0x0008
-#define ISR_LO 0x0018
-#else
+#define NO_BOOTLOADER
+#endif
+
+
 // Normal operation. Built hex image should be inserted by bootloader
+#define _RESET 0x2000
 #define ISR_HI 0x2008
 #define ISR_LO 0x2018
 
 // JvE: pragmas for bootloader addressing made
 // according to MPASM&MPLINK manual, chapter 13.5
 // The 'reset' jumps into the real 'main', not a device init function.
-#pragma code app_start=0x2000
-void app_start(void)
+extern void _startup (void); // See c018i.c in your C18 compiler dir
+#pragma code app_start = _RESET
+void _reset(void)
 {
-	_asm goto main _endasm	
+	_asm goto _startup _endasm	
 }
-#endif
 
 // high-priority interrupt vector: (global interrupt vector if IPEN is clear)
 #pragma code app_isr_hi = ISR_HI
@@ -75,6 +76,20 @@ void app_interrupt_at_low_vector(void)
 	_asm goto app_isr_high _endasm	
 #endif
 }
+
+#ifdef NO_BOOTLOADER
+#pragma code boot_isr_hi=0x0008
+void boot_isr_high(void)
+{
+	_asm goto app_interrupt_at_high_vector _endasm	
+}
+#pragma code boot_isr_lo = 0x0018
+void boot_isr_low(void)
+{
+	_asm goto app_interrupt_at_low_vector _endasm
+}
+#endif
+
 #pragma code
 // back to normal code allocation
 
@@ -95,6 +110,8 @@ void main(void)
 	display_set( 0x00, 0x00);
 	display_set_alt( 0x00, 0x00, 0x00);
 	amp_state_init();
+	relay_boards_init();
+	set_relays(0x00, 0x01, 0x00, 0x00, 0x00);
 
 	// Globally enable interrupts
 #ifdef UseIPEN
@@ -108,6 +125,7 @@ void main(void)
 	// (re-)launch USB activity
 	prev_usb_bus_sense = 0;
 	usb_write( init_msg, (byte)4);
+
 	
 	while (1)
 	{
@@ -116,7 +134,7 @@ void main(void)
 
 		if (channel_incr)
 			channel_update();
-		
+
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
 		check_usb_power();
 	}
@@ -145,6 +163,7 @@ void app_isr_high(void)
 	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
 	{
 		display_isr();
+
 		if (volume_tick)
 			volume_tick--;
 
@@ -170,7 +189,7 @@ void app_isr_high(void)
 	}
 
 	if (INTCON3bits.INT3IE && INTCON3bits.INT3IF)
-	{
+	{	// falling edge on channel input (SelectB)
 		if (chan_tick == 0)
 		{
 			channel_incr = 1;
@@ -197,7 +216,7 @@ void app_isr_low(void)
 
 static void init(void)
 {
-	// Reset some things, which aren't reset from USB command
+	// Reset some things, just to be sure
 	RCONbits.IPEN = IPENvalue; // enable interrupt priority mechanism
 	INTCON = 0; // disable all interrupts for now
 	INTCON2 = 0xFF;
@@ -212,7 +231,9 @@ static void init(void)
 	IPR2 = 0;
 	IPR3 = 0;
 
-#ifndef __DEBUG
+#ifdef NO_BOOTLOADER
+	PIR2bits.USBIF = 0;
+#else
 	PIE2bits.USBIE = 1;  // allow USB interrupts
 #endif
 
@@ -258,7 +279,6 @@ static void init(void)
 	// hmm... measure as 2x91.5509 Hz
 	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
 	IPR3bits.TMR4IP = 1; // high priority interrupt
-	//IPR3bits.TMR4IP = 0; // low priority interrupt
 	PIE3bits.TMR4IE = 1;
 	
 	// Volume rotary interrupt enable (on PortA, through PPS)
@@ -272,4 +292,16 @@ static void init(void)
 	INTCON3bits.INT3IF = 0;
 	INTCON2bits.INT3IP = 1;
 	INTCON3bits.INT3IE = 1;
+
+	// I2C master to drive relay board(s)
+    // adapted from OpenI2C in C18/pmc_common library
+  	SSP1STAT &= 0x3F;               // power on state 
+  	SSP1CON1 = 0x00;                // power on state
+  	SSP1CON2 = 0x00;                // power on state
+  	SSP1CON1 |= MASTER;           	// select serial mode 
+  	SSP1STAT |= 0;                	// slew rate on/off 
+
+  	//TRISBbits.TRISB5 = 1;         // SDA is input
+  	//TRISBbits.TRISB4 = 1;			// SCL is input
+  	SSP1CON1bits.SSPEN = 1;         // enable synchronous serial port
 }	
