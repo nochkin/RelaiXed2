@@ -180,7 +180,7 @@ unsigned char ErasePageTracker;
 unsigned char ProgrammingBuffer[BufferSize];
 unsigned char BufferedDataIndex;
 unsigned short long ProgrammedPointer;
-
+static byte stay_in_bootload;
 
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 void BlinkUSBStatus(void);
@@ -200,6 +200,7 @@ void UserInit(void)
 	BootState = Idle;
 	ProgrammedPointer = InvalidAddress;	
 	BufferedDataIndex = 0;
+	stay_in_bootload = 0;
 }//end UserInit
 
 
@@ -228,18 +229,13 @@ void UserInit(void)
  * (the relaixed code) because half-way this bootloader interaction that
  * application program might be corrupt, like only partially uploaded or erased.
  *****************************************************************************/
-static byte stay_in_bootload = 0;
 void ProcessBootLoad(void)
 {
 	byte PIE3_cpy = PIE3;
-	// Stop relaixed operation (such as timer interrupts)
-	//PIE1 = 0;
-	//PIE2 = 0;
 	PIE3 = 0;
 	UIE = 0x3D;
 	PIE2bits.USBIE = 1; // restore
 	
-	//while (usb_bus_sense && UCONbits.USBEN) // leave only on a reset command
 	do
 	{
 		ProcessIO();
@@ -274,16 +270,15 @@ void ProcessBootLoad(void)
 	}
 	while (usb_bus_sense && (BootState != Idle || !mHIDRxIsBusy() || stay_in_bootload));
 	// USB cable to PC was detached, proceed with Reset to launch the application program
-	if (stay_in_bootload)
+	while (stay_in_bootload)
 	{
 		LongDelay();
-		Reset();
+		//Reset();
+		// Goto reset-address of newly loaded program: init its vars, reset its stack
+		// but keep the current state of my USB subsystem
+		//_asm goto ProgramMemStart _endasm
 	}
 	PIE3 = PIE3_cpy;
-	// Goto reset-address of newly loaded program: init its vars, reset its stack
-	// but keep the current state of my USB subsystem
-	// Hmm... the intended 'goto ProgramMemStart' does not work, it locks the USB line :-(
-	//_asm goto ProgramMemStart _endasm
 }
 
 void ProcessIO(void)
@@ -344,19 +339,33 @@ void ProcessIO(void)
 				break;
 			case ERASE_DEVICE:
 			{
+				// JvE: make sure we will not enter some Relaixed high-priority isr that does not exist anymore
 				stay_in_bootload = 1;
+				PIE1 = 0;
+				PIE2 = 0;
+				PIE3 = 0;
+				INTCON3 = 0;
+				PIE2bits.USBIE = 1; // restore
+
 				for(ErasePageTracker = StartPageToErase; ErasePageTracker < (MaxPageToErase + 1); ErasePageTracker++)
 				{
 					ClrWdt();
 					EraseFlash();
-					//USBDriverService(); 	//Call USBDriverService() periodically to prevent falling off the bus if any SETUP packets should happen to arrive.
+					USBDriverService(); 	//Call USBDriverService() periodically to prevent falling off the bus if any SETUP packets should happen to arrive.
 				}
 				BootState = Idle;				
 			}
 				break;
 			case PROGRAM_DEVICE:
 			{
+				// JvE: make sure we will not enter some Relaixed isr that does not exist anymore
 				stay_in_bootload = 1;
+				PIE1 = 0;
+				PIE2 = 0;
+				PIE3 = 0;
+				INTCON3 = 0;
+				PIE2bits.USBIE = 1; // restore
+
 				if(ProgrammedPointer == (unsigned short long)InvalidAddress)
 					ProgrammedPointer = PacketFromPC.Address;
 				
