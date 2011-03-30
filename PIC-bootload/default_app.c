@@ -37,12 +37,17 @@ void app_interrupt_at_low_vector(void)
 	_asm goto app_isr_low _endasm
 }
 
-
 #pragma code page=0x2020
 void app_main(void)
 {
 	unsigned int i;
 	byte j;
+
+	// Test to see if interrupts to an application still work properly:
+	// setup Timer4 for display refresh: 2^16 downscale from Fosc/4 is 153Hz
+	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
+	IPR3bits.TMR4IP = 1; // high priority interrupt
+	PIE3bits.TMR4IE = 1;
 
 	while(1)
 	{
@@ -107,7 +112,14 @@ void app_isr_low(void)
 {
 }
 
+#define LEDright PORTCbits.RC7
+
 #pragma interrupt app_isr_high
 void app_isr_high(void)
 {
+	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
+	{   // multiplex both 7-segment displays
+		LEDright = !LEDright;
+		PIR3bits.TMR4IF = 0;
+	}
 }

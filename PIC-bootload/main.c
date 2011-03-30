@@ -74,31 +74,6 @@ project will have to be modified to make the BootPage section larger.
 //Usage tips for this HID USB bootloader firwmare
 //----------------------------------------------------
 
-//To enter this bootloader firmware, hold the RB2 I/O pin low at power
-//up or after a reset.  Alternatively, application firmware may enter
-//the bootloader firmware by clearing the INTCON<GIE> bit and then
-//executing an "_asm goto 0x001C _endasm" instruction.
-
-//If a high priority interrupt occurs, the PC will jump to 0x1008
-//If a low priority interrupt occurs, the PC will jump to 0x1018
-
-//If RB2 is high at power up/after reset, this code will jump to
-//the application firmware, instead of staying in this bootloader firmware.
-//The start of the application firmware should be at 0x1000
-//In other words, when developing the application firmware which will be
-//programmed with this bootloader, place the following in the code, if
-//it is a C18 based project:
-
-//extern void _startup (void);    // See c018i.c in your C18 compiler dir
-//#pragma code AppFirmwareStartLocation = 0x1000
-//void _reset (void)
-//{
-//    _asm goto _startup _endasm
-//}
-
-//Build the application project with a linker script that marks
-//the address range 0x000-0xFFF as "PROTECTED".  This is the program
-//memory region that this bootloader is currently configured to occupy.
 
 //Although the bootloader can re-program the program memory page that
 //contains the configuration bits (the last page of implemented flash)

@@ -117,7 +117,7 @@ void USBSubSystem(void)
 		UIEbits.ACTVIE = 1; // but allow wake-up
 		// UIR = 0x00;
  	}
- 	TXADDRL = usb_device_state;	// JvE: HACK for observability
+ 	TXADDRL = usb_device_state;	// JvE: HACK for observability to boot-loaded application
 	UIE = 0x3D;
 	PIE2bits.USBIE = 1; // restore
   	
