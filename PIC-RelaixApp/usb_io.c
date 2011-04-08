@@ -326,3 +326,9 @@ void usb_write( const char *buffer, byte len)
  		HIDTxReport_log(buffer, len);
 }
 
+// Configure the standard C18 stdio library to print to USB as stdout
+int _user_putc (char c)
+{
+	usb_write( &c, 1);
+	return 1;
+}
