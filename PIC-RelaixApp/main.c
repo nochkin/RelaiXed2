@@ -24,6 +24,7 @@
 
 
 #include <p18cxxx.h>
+#include <stdio.h>
 #include <i2c.h>
 #include "typedefs.h"                   
 #include "io_cfg.h"
@@ -94,15 +95,17 @@ void boot_isr_low(void)
 // back to normal code allocation
 
 static BOOL prev_usb_bus_sense;
-static int volume_tick, usb_tick, chan_tick;
+static unsigned int volume_tick, usb_tick, chan_tick;
 
 void main(void)
 {
 	unsigned int i;
 	char usb_char;
 	const char init_msg[] = {'I', 'N', 'I', 'T'};
+	extern FILE *stdout = _H_USER;  // redirect stdout to USB
 	
 	init();
+	
 	display_cnt = 0;
     volume_tick = 0;
 	chan_tick = 0;
@@ -134,6 +137,9 @@ void main(void)
 
 		if (channel_incr)
 			channel_update();
+
+		if (power_down_button)
+			power_update();
 
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
 		check_usb_power();
@@ -168,7 +174,12 @@ void app_isr_high(void)
 			volume_tick--;
 
 		if (chan_tick)
+		{
 			chan_tick--;
+			if (chan_tick == 0 && INTCON2bits.INTEDG3)
+				// waited long for rising edge
+				power_down_button = 1;
+		}
 
 		PIR3bits.TMR4IF = 0;
 	}
@@ -189,11 +200,25 @@ void app_isr_high(void)
 	}
 
 	if (INTCON3bits.INT3IE && INTCON3bits.INT3IF)
-	{	// falling edge on channel input (SelectB)
-		if (chan_tick == 0)
+	{
+		if (INTCON2bits.INTEDG3 && chan_tick < 252)
 		{
-			channel_incr = 1;
-			chan_tick = 10;
+			// rising edge on channel input (SelectB)
+			if (chan_tick == 0)
+			{
+				// did already do power-down a while ago
+			}
+			else
+			{ // quick release: do next channel
+				channel_incr = 1;
+			}
+			chan_tick = 3;
+			INTCON2bits.INTEDG3 = 0; // look for falling edge
+		} else if (!INTCON2bits.INTEDG3 && chan_tick == 0)
+		{
+			// falling edge on channel input (SelectB)
+			chan_tick = 255; // Count duration of push button
+			INTCON2bits.INTEDG3 = 1; // look for rising edge
 		}
 		INTCON3bits.INT3IF = 0;
 	}
@@ -275,8 +300,7 @@ static void init(void)
 	// Timer3: 3-bit prescale, 16-bit counter, allows cascading with TMR1 or TMR2, sets TMR1IF(!)
 	// Timer4: 4-bit prescale, 8-bit count&compare, 4=bit postscale, sets TMR4IF
 	
-	// setup Timer4 for display refresh: 2^16 downscale from Fosc/4 is 153Hz
-	// hmm... measure as 2x91.5509 Hz
+	// setup Timer4 for display refresh: 2^16 downscale from Fosc/4 is 183Hz
 	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
 	IPR3bits.TMR4IP = 1; // high priority interrupt
 	PIE3bits.TMR4IE = 1;

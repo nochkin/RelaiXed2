@@ -25,7 +25,8 @@ static rom near char segment_table[] = {
 	12  /* 'U' */
 };
 
-// Display refresh, called from isr on TMR4 wraparound, at 153Hz rate
+// Display refresh, called from isr on TMR4 wraparound, at 183Hz rate
+// We toggle 'LEDright' (digit select), giving multiplex frequency of 91.5Hz.
 void display_isr(void)
 {
 	byte segment, inx;
@@ -36,7 +37,7 @@ void display_isr(void)
 	if (display_cnt & 0x01)
 		inx++; // for even cnts, show lower (right) segment
 
-	if (alt_display_cnt != 0 && (display_cnt & 0x80))
+	if (alt_display_cnt != 0)// Don't alternate... && (display_cnt & 0x80))
 	{
 		inx += 2;
 		if (alt_display_cnt != 0xff && display_cnt == 0x80)
@@ -63,6 +64,7 @@ void display_set(byte digit_hi, byte digit_lo)
 {
 	segment_data[0] = segment_table[digit_lo];
 	segment_data[1] = segment_table[digit_hi];
+	alt_display_cnt = 0;
 }	
 
 void display_set_alt( byte digit_hi, byte digit_lo, byte duration)
