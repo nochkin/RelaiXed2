@@ -9,16 +9,26 @@
 #include "usb_io.h"
 #include "display.h"
 #include "relays.h"
+#include "storage.h"
  
 volatile char volume_incr; // modified from isr
-static char master_volume;
 static char volume_incr_carry;
 
 volatile char channel_incr;
-volatile char power_down_button;
-static byte channel;
+volatile char power_incr;
 
 static char power;
+
+static struct store_volume
+{
+	StorageKey key;
+	byte	_volume;
+	byte	_balance;
+	byte	_channel;
+} StoreVolume;
+#define master_volume	StoreVolume._volume
+#define channel			StoreVolume._channel
+#define balance			StoreVolume._balance
 
 // Input selection channels: numbered 0 .. 5
 #define NCHANNELS 6
@@ -27,10 +37,10 @@ void amp_state_init(void)
 {
 	volume_incr = 0;
     volume_incr_carry = 0;
-	master_volume = 0;
-	power_down_button = 0;
-	channel = 1;
-	power = 1;
+	power_incr = 0;
+	channel_incr = 0;
+	channel = 0;
+	power = 0;
 }	
  
 void volume_update(void)
@@ -39,7 +49,7 @@ void volume_update(void)
 	char vol_msg[] = {'V', '+', '0'};
 	char vol_incr_abs;
 
-	if (!power)
+	if (power < 2)
 		return;
 
 	volume_incr_carry += volume_incr;
@@ -74,6 +84,9 @@ void volume_update(void)
 		volume_incr_carry += 2;		
 	}
 
+	if (master_volume > 64)
+		master_volume = 0; // weird, flash_load error?
+
 	set_relays(0x00, power, channel, master_volume, master_volume);
 	
 	vol_div_10 = 0;
@@ -91,12 +104,8 @@ void channel_update(void)
 	char chan_msg[] = {'C', '+', '0'};
 	char chan_incr_abs;
 
-	if (!power)
-	{
-		// first enable power, don't modify channel
-		power_update();
-		channel_incr = 0;
-	}
+	if (power < 2)
+		return;
 
 	if (channel_incr >= 0)
 	{
@@ -113,6 +122,8 @@ void channel_update(void)
 
 	while (channel > 6)
 		channel -= 6;
+	if (channel == 0)
+		channel = 1;
 
 	set_relays(0x00, power, channel, master_volume, master_volume);
 
@@ -123,23 +134,56 @@ void channel_update(void)
 
 void power_update(void)
 {
+	// maintain different power states:
+	// 0: audio is muted, analog power is off, minimal stand-by power
+	// 1: analog power is switched-on, audio is muted, timer running to enter next power level
+	// 2: analog power is on, audio is on
+
 	char chan_msg[] = {'P', '0'};
 
-	if (power_down_button && power)
+	if (power_incr == -1 && power != 0)
 	{
+		// first do audio mute...
 		master_volume = 0;
 		volume_incr_carry = 0;
 		set_relays(0x00, power, channel, master_volume, master_volume);
 		display_set( DIGIT_dark, DIGIT_dark);
+		// and follow immediatly with analog power shutdown
 		power = 0;
-		power_down_button = 0;
+		power_incr = 0;
 		set_relays(0x00, power, channel, master_volume, master_volume);
-	} else if (!power)
+	} else if (power_incr > 0 && power == 0)
 	{
 		power = 1;
-		set_relays(0x00, power, channel, master_volume, master_volume);
+		display_set( 0x00, 0x00);
+		set_relays(0x00, power, 0x00, 0x00, 0x00);
+	} else if (power_incr > 0 && power == 1)
+	{
+		power = 2;
+		flash_load(KeyVolume, &StoreVolume.key);
+		if (master_volume > 64)
+			master_volume = 0;
+		volume_incr = 0;
+		channel_incr = 0;
+		volume_update();
+		channel_update();
 	}
 
-	chan_msg[1] = power ? '1' : '0';
+	power_incr = 0;
+	chan_msg[1] = '0' + power;
 	usb_write( chan_msg, (byte)2); // two-char message
+}
+
+void flash_volume_channel(void)
+{
+	char flash_msg[] = {'F', 'v'};
+
+	StoreVolume.key = KeyVolume; // Just to be sure, suppress flash errors
+	flash_store(KeyVolume, &StoreVolume.key);
+	usb_write( flash_msg, (byte)2); // two-char message
+}
+
+char power_state(void)
+{
+	return power;
 }
