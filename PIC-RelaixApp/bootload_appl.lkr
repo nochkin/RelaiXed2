@@ -25,16 +25,21 @@ LIBPATH .
 #IFDEF _DEBUGCODESTART
   CODEPAGE   NAME=vectors    START=0x0            END=0x29           PROTECTED
   CODEPAGE   NAME=BootPage   START=0x2A           END=0x1FFF	//Normally uses 0x2A - 0xFFF, but when using debug optimizations, may take more space
-  CODEPAGE   NAME=page       START=0x1400         END=_CODEEND        PROTECTED
+//  CODEPAGE   NAME=page       START=0x2000         END=_CODEEND        PROTECTED
+  CODEPAGE   NAME=page       START=0x2000         END=0x73FF
   CODEPAGE   NAME=debug      START=_DEBUGCODESTART   END=_CEND        PROTECTED
 #ELSE
   CODEPAGE   NAME=vectors    START=0x0            END=0x29           PROTECTED
   CODEPAGE   NAME=BootPage   START=0x2A           END=0x1FFF         PROTECTED
-  CODEPAGE   NAME=page       START=0x2000         END=0x7FF7
+//  CODEPAGE   NAME=page       START=0x2000         END=0x7FF7
+  CODEPAGE   NAME=page       START=0x2000         END=0x73FF
 #FI
 
 CODEPAGE   NAME=config     START=0x7FF8            END=0x7FFF        PROTECTED
 CODEPAGE   NAME=devid      START=0x3FFFFE          END=0x3FFFFF      PROTECTED
+CODEPAGE   NAME=storage    START=0x7400            END=0x7BFF        PROTECTED
+
+SECTION    NAME=my_storage ROM=storage
 
 // reserved space for accessram in bootloader:
 DATABANK NAME=bootaccess   START=0x00            END=0x1F        PROTECTED

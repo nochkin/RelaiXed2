@@ -30,6 +30,7 @@
 #include "io_cfg.h"
 #include "display.h"
 #include "usb_io.h"
+#include "storage.h"
 #include "amp_state.h"
 #include "relays.h"
 
@@ -95,7 +96,7 @@ void boot_isr_low(void)
 // back to normal code allocation
 
 static BOOL prev_usb_bus_sense;
-static unsigned int volume_tick, usb_tick, chan_tick;
+static unsigned int volume_tick, usb_tick, chan_tick, power_tick, flash_tick;
 
 void main(void)
 {
@@ -112,9 +113,10 @@ void main(void)
 	usb_tick = 0;
 	display_set( 0x00, 0x00);
 	display_set_alt( 0x00, 0x00, 0x00);
-	amp_state_init();
+	storage_init();
 	relay_boards_init();
 	set_relays(0x00, 0x01, 0x00, 0x00, 0x00);
+	amp_state_init();
 
 	// Globally enable interrupts
 #ifdef UseIPEN
@@ -129,7 +131,12 @@ void main(void)
 	prev_usb_bus_sense = 0;
 	usb_write( init_msg, (byte)4);
 
-	
+	// The above 'set_relays' enabled the power relay for the analog supply.
+	// Set a timer to later undo the mute and activate last volume setting.
+	power_incr = 1;
+	power_tick = 400;
+
+
 	while (1)
 	{
 		if (volume_incr)
@@ -138,8 +145,21 @@ void main(void)
 		if (channel_incr)
 			channel_update();
 
-		if (power_down_button)
+		if (power_incr)
+		{
+			if (flash_tick && power_incr < 0)
+			{
+				flash_tick = 0;
+				flash_volume_channel();
+			}
 			power_update();
+		}
+
+		if (flash_tick == 1)
+		{
+			flash_tick = 0;
+			flash_volume_channel();
+		}
 
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
 		check_usb_power();
@@ -165,7 +185,8 @@ void check_usb_power(void)
 #pragma interrupt app_isr_high
 void app_isr_high(void)
 {
-
+	// Timer4 wrap-around timer event, issued at 183Hz rate
+	// Used for display multiplexing, but also for various local time counters
 	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
 	{
 		display_isr();
@@ -177,9 +198,19 @@ void app_isr_high(void)
 		{
 			chan_tick--;
 			if (chan_tick == 0 && INTCON2bits.INTEDG3)
-				// waited long for rising edge
-				power_down_button = 1;
+				// waited long for rising edge: do power-down
+				power_incr = -1;
 		}
+
+		if (power_tick)
+		{
+			power_tick--;
+			if (power_tick == 0)
+				power_incr = 1;
+		}
+
+		if (flash_tick > 1)
+			flash_tick--;
 
 		PIR3bits.TMR4IF = 0;
 	}
@@ -194,6 +225,7 @@ void app_isr_high(void)
 				volume_incr += 1;
 		
         	volume_tick = 2; // create delay
+			flash_tick = 300;
 		}
 		INTCON2bits.INTEDG2 = !VolA;
 		INTCON3bits.INT2IF = 0;
@@ -210,7 +242,16 @@ void app_isr_high(void)
 			}
 			else
 			{ // quick release: do next channel
-				channel_incr = 1;
+				if (power_state() == 2)
+				{
+					channel_incr = 1;
+					flash_tick = 300;
+				}
+				else if (power_state() == 0)
+				{
+					power_incr = 1;
+					power_tick = 400; // timer to later update power to state 2
+				}
 			}
 			chan_tick = 3;
 			INTCON2bits.INTEDG3 = 0; // look for falling edge
