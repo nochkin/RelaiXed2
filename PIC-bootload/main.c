@@ -144,7 +144,7 @@ project will have to be modified to make the BootPage section larger.
      #pragma config DSWDTPS = 8192       //1:8,192 (8.5 seconds)
      #pragma config IOL1WAY = OFF        //IOLOCK bit can be set and cleared
      #pragma config MSSP7B_EN = MSK7     //7 Bit address masking
-     #pragma config WPFP = PAGE_1        //Write Protect Program Flash Page 0
+     #pragma config WPFP = PAGE_7        //Write Protect Program Flash Page 0
      #pragma config WPEND = PAGE_0       //Start protection at page 0
      #pragma config WPCFG = OFF          //Write/Erase last page protect Disabled
      #pragma config WPDIS = OFF          //WPFP[5:0], WPEND, and WPCFG bits ignored 

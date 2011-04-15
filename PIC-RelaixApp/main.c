@@ -17,7 +17,7 @@
 #pragma config DSWDTPS = 8192       //1:8,192 (8.5 seconds)
 #pragma config IOL1WAY = OFF        //IOLOCK bit can be set and cleared
 #pragma config MSSP7B_EN = MSK7     //7 Bit address masking
-#pragma config WPFP = PAGE_1        //Write Protect Program Flash Page 0
+#pragma config WPFP = PAGE_7        //Write Protect Program Flash Page 0
 #pragma config WPEND = PAGE_0       //Start protection at page 0
 #pragma config WPCFG = OFF          //Write/Erase last page protect Disabled
 #pragma config WPDIS = OFF          //WPFP[5:0], WPEND, and WPCFG bits ignored
@@ -206,7 +206,11 @@ void app_isr_high(void)
 		{
 			power_tick--;
 			if (power_tick == 0)
+			{
 				power_incr = 1;
+				PIR2bits.LVDIF = 0;
+				PIE2bits.LVDIE = 1; // watch power-supply level
+			}
 		}
 
 		if (flash_tick > 1)
@@ -262,6 +266,15 @@ void app_isr_high(void)
 			INTCON2bits.INTEDG3 = 1; // look for rising edge
 		}
 		INTCON3bits.INT3IF = 0;
+	}
+
+	// Power-supply drop on digital power: quickly mute audio
+	if (PIE2bits.LVDIE && PIR2bits.LVDIF)
+	{
+		if (power_state() == 2)
+			power_incr = -1;
+		PIR2bits.LVDIF = 0;
+		PIE2bits.LVDIE = 0; // we go power-down, prevent interrupt to repeat
 	}
 #ifdef UseIPEN
 }
@@ -369,4 +382,14 @@ static void init(void)
   	//TRISBbits.TRISB5 = 1;         // SDA is input
   	//TRISBbits.TRISB4 = 1;			// SCL is input
   	SSP1CON1bits.SSPEN = 1;         // enable synchronous serial port
+
+	// Set-up HVLD module: mute audio when power-supply unexpectedly drops
+	// Programmed HVLD value '1011' corrsponds to 2.9V (range 2.76 - 3.05)
+    // Take a small safety margin on that voltage level,
+    // choosing it too low, can cause a too late audio mute.
+    // (in time is as long as the audio opamps have reasonable supply voltage)
+	HLVDCON = 0x79;
+	PIR2bits.LVDIF = 0;
+	IPR2bits.LVDIP = 1;
+	PIE2bits.LVDIE = 0; //Enable only after power has stabelized
 }	
