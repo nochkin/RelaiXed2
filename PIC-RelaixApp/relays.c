@@ -42,7 +42,7 @@ void relay_boards_init(void)
 
 void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
 {
-	// 'power' is single-bit
+	// 'power' off is 0, non-zero is power on.
 	// channel is 1..6 for input selection, 0 for mute
 	// vol_[rl] ranges from 0..64
 	byte chip_addr;

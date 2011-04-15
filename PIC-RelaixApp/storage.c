@@ -30,7 +30,11 @@ static rom near StorageKey *key_ptr[MAX_KEYS];
 static unsigned char curr_page_nr;
 
 static const unsigned char key_packet_sz[MAX_KEYS] = {16, 16, 16, 4};
-static char packet_buf[16];
+static union
+{
+	char chars[16];
+	unsigned int words[8];
+} packet_buf;
 
 // Pages of flash memory to store Relaixed state
 // Allocated to a page-aligned address in the linker script
@@ -44,21 +48,24 @@ void storage_init(void)
 {
 	rom near StorageKey *p;
 	StorageKey key;
-	unsigned char i;
+	unsigned char i, n;
 	unsigned int j;
 
 	// select current active flash page
 	// JvE: Need to update this 'if' in case N_PAGES > 2...
-	if (storage_area[0] == FLASH_ERASED && storage_area[FLASH_ERASE_BLOCK] != FLASH_ERASED)
-		curr_page_nr = 1;
+	key = storage_area[FLASH_ERASE_BLOCK]; // start of page 1
+	if (key == FLASH_EMPTY || key == FLASH_ERASED)
+		curr_page_nr = 0; // try to append to (partially filled) page 0
 	else
-		curr_page_nr = 0;
+		curr_page_nr = 1;
 	current_page = &storage_area[curr_page_nr * FLASH_ERASE_BLOCK];
+	key = current_page[0]; //first item in currrent page
 
-	if (current_page[0] == FLASH_EMPTY)
+	if (key == FLASH_EMPTY)
 	{
 		// set to 0 by linker, erase to 0xFF
 		EraseFlash((unsigned long)current_page, (unsigned long)(current_page + FLASH_ERASE_BLOCK - 1));
+		EECON1bits.WREN = 0;
 	}
 
 	// fetch last written packet for each key (each type) from flash page
@@ -67,9 +74,14 @@ void storage_init(void)
 
 	for (j = 0;
 		 j < FLASH_ERASE_BLOCK && (key = current_page[j]) != FLASH_ERASED;
-		 j += key_packet_sz[key])
+		 j += n)
 	{
-		key_ptr[key] = current_page + j;
+		if (key > 0 && key < MAX_KEYS)
+		{
+			key_ptr[key] = current_page + j;
+			n = key_packet_sz[key];
+		} else
+			n = 4; // hm... got error, weird key value 
 	}
 
 	// key_ptr[0] is reserved to point to the next available location to store new data.
@@ -82,26 +94,25 @@ void storage_init(void)
 }
 
 // Storing data into flash, must be in units of 16-bit words and to aligned address.
-void flash_store(StorageKey key, const char *p)
+void flash_store(StorageKey key, const unsigned int *w)
 {
-	unsigned char i, n;
-	WORD data;
+	unsigned char i, n, n_words;
 	unsigned long rom_addr = (unsigned long)key_ptr[0];
 	// The addrs in 'key_ptr' are multiples of 2 by construction.
 	
 	n = key_packet_sz[key];
+	n_words = n >> 1;
 
 	if ((rom_addr & (FLASH_ERASE_BLOCK-1)) + n >= FLASH_ERASE_BLOCK)
 		rom_addr = flash_new_page();
 
-	for (i=0; i<n; i += 2)
+	for (i = 0; i < n_words; i++)
 	{
-		LSB(data) = *p++;
-		MSB(data) = *p++;
-
-		WriteWordFlash(rom_addr, data._word);
+		WriteWordFlash(rom_addr, *w++);
 		rom_addr += 2;
 	}
+	EECON1bits.WREN = 0;
+
 	// administrate the availability of this last packet of type 'key':
 	key_ptr[key] = key_ptr[0];
 
@@ -150,12 +161,13 @@ static unsigned long flash_new_page(void)
 	{
 		if (!key_ptr[key]) continue;
 
-		flash_load(key, packet_buf);
-		flash_store(key, packet_buf); // Note: this increments key_ptr[0]
+		flash_load(key, packet_buf.chars);
+		flash_store(key, packet_buf.words); // Note: this increments key_ptr[0]
 	}
 
 	// new page is initialised. Now erase old page so that it is not selected at a next reboot
 	EraseFlash((unsigned long)current_page, (unsigned long)(current_page + FLASH_ERASE_BLOCK - 1));
+	EECON1bits.WREN = 0;
 
 	curr_page_nr = new_page_nr;
 	current_page = new_page;

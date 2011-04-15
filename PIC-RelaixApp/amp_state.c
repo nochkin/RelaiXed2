@@ -19,13 +19,18 @@ volatile char power_incr;
 
 static char power;
 
-static struct store_volume
+static union store_volume
 {
-	StorageKey key;
-	byte	_volume;
-	byte	_balance;
-	byte	_channel;
+	struct
+	{
+		StorageKey key;
+		byte	_volume;
+		byte	_balance;
+		byte	_channel;
+	};
+	unsigned int words[2];
 } StoreVolume;
+
 #define master_volume	StoreVolume._volume
 #define channel			StoreVolume._channel
 #define balance			StoreVolume._balance
@@ -144,19 +149,24 @@ void power_update(void)
 	if (power_incr == -1 && power != 0)
 	{
 		// first do audio mute...
-		master_volume = 0;
-		volume_incr_carry = 0;
-		set_relays(0x00, power, channel, master_volume, master_volume);
+		set_relays(0x00, power, 0x00, 0x00, 0x00);
 		display_set( DIGIT_dark, DIGIT_dark);
 		// and follow immediatly with analog power shutdown
+
+        // set volume-state down AFTER power-state down,
+        // otherwise an interrupt-flash-tick might store a (wrong) 0 volume to flash
 		power = 0;
 		power_incr = 0;
-		set_relays(0x00, power, channel, master_volume, master_volume);
+		master_volume = 0; 
+		volume_incr_carry = 0;
+		set_relays(0x00, 0x00, 0x00, 0x00, 0x00);
 	} else if (power_incr > 0 && power == 0)
 	{
 		power = 1;
 		display_set( 0x00, 0x00);
 		set_relays(0x00, power, 0x00, 0x00, 0x00);
+		// Enable analog power, stay in mute
+		// Later, from the 'power_tick' counter, power will be incremented to 2
 	} else if (power_incr > 0 && power == 1)
 	{
 		power = 2;
@@ -178,8 +188,11 @@ void flash_volume_channel(void)
 {
 	char flash_msg[] = {'F', 'v'};
 
+	if (power != 2)
+		return; // Only save volume in power-up steady-state
+
 	StoreVolume.key = KeyVolume; // Just to be sure, suppress flash errors
-	flash_store(KeyVolume, &StoreVolume.key);
+	flash_store(KeyVolume, StoreVolume.words);
 	usb_write( flash_msg, (byte)2); // two-char message
 }
 
