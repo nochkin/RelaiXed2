@@ -177,6 +177,9 @@ void power_update(void)
 		channel_incr = 0;
 		volume_update();
 		channel_update();
+
+		PIR2bits.LVDIF = 0;
+		PIE2bits.LVDIE = 1; // watch power-supply level for drops
 	}
 
 	power_incr = 0;

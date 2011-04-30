@@ -33,6 +33,7 @@
 #include "storage.h"
 #include "amp_state.h"
 #include "relays.h"
+#include "ir_receiver.h"
 
 // Forward declarations
 void app_isr_high(void);
@@ -96,7 +97,7 @@ void boot_isr_low(void)
 // back to normal code allocation
 
 static BOOL prev_usb_bus_sense;
-static unsigned int volume_tick, usb_tick, chan_tick, power_tick, flash_tick;
+static unsigned int volume_tick, usb_tick, chan_tick, power_tick, flash_tick, ir_tick;
 
 void main(void)
 {
@@ -111,8 +112,10 @@ void main(void)
     volume_tick = 0;
 	chan_tick = 0;
 	usb_tick = 0;
+    ir_tick = 0;
 	display_set( 0x00, 0x00);
 	display_set_alt( 0x00, 0x00, 0x00);
+	ir_receiver_init();
 	storage_init();
 	relay_boards_init();
 	set_relays(0x00, 0x01, 0x00, 0x00, 0x00);
@@ -133,9 +136,21 @@ void main(void)
 
 	// The above 'set_relays' enabled the power relay for the analog supply.
 	// Set a timer to later undo the mute and activate last volume setting.
+	// power==0 now, from amp_state_init().
+	// incr now quickly to 1, and later to 2.
 	power_incr = 1;
 	power_tick = 400;
 
+	// wait some time for stabilization before enabling all other interrupts
+	while (power_tick > 350)
+		; // gets decreased on timer interrupts
+
+	INTCON3bits.INT1IF = 0;
+	INTCON3bits.INT1IE = 1;
+	INTCON3bits.INT2IF = 0;
+	INTCON3bits.INT2IE = 1;
+	INTCON3bits.INT3IF = 0;
+	INTCON3bits.INT3IE = 1;
 
 	while (1)
 	{
@@ -151,6 +166,10 @@ void main(void)
 			{
 				flash_tick = 0;
 				flash_volume_channel();
+			} else if (power_incr > 0 && power_state() == 0)
+			{
+				// if we move power_state from 0 to 1, we surely want to go later to 2
+				power_tick = 400;
 			}
 			power_update();
 		}
@@ -194,10 +213,13 @@ void app_isr_high(void)
 		if (volume_tick)
 			volume_tick--;
 
+		if (ir_tick)
+			ir_tick--;
+
 		if (chan_tick)
 		{
 			chan_tick--;
-			if (chan_tick == 0 && INTCON2bits.INTEDG3)
+			if (chan_tick == 0 && INTCON2bits.INTEDG3 && power_state() == 2)
 				// waited long for rising edge: do power-down
 				power_incr = -1;
 		}
@@ -208,8 +230,7 @@ void app_isr_high(void)
 			if (power_tick == 0)
 			{
 				power_incr = 1;
-				PIR2bits.LVDIF = 0;
-				PIE2bits.LVDIE = 1; // watch power-supply level
+				// INTCON3bits.INT3IE set only after reaching here??
 			}
 		}
 
@@ -217,6 +238,26 @@ void app_isr_high(void)
 			flash_tick--;
 
 		PIR3bits.TMR4IF = 0;
+	}
+
+	if (INTCON3bits.INT1IE && INTCON3bits.INT1IF)
+	{   // edge on IR-receiver input
+		INTCON3bits.INT1IF = 0;
+		INTCON2bits.INTEDG1 = !IRserial;
+	
+		if (ir_tick == 0)
+		{	// the tick counter is to prevent a too high rate of processing volume/channel updates
+			ir_receiver_isr();
+		}
+	}
+
+	if (INTCONbits.TMR0IE && INTCONbits.TMR0IF)
+	{	// IR receiver timer expires: end of IR pulse-train
+		// Might be a an unexpected termination on a bad signal reception
+		ir_tmr_isr();
+		ir_tick = 80;
+		INTCONbits.TMR0IE = 0; // do this interrupt only once after IR pulse train.
+		INTCON2bits.INTEDG1 = 0; // a new pulse-train should start with a neg-edge.
 	}
 
 	if (INTCON3bits.INT2IE && INTCON3bits.INT2IF)
@@ -236,7 +277,7 @@ void app_isr_high(void)
 	}
 
 	if (INTCON3bits.INT3IE && INTCON3bits.INT3IF)
-	{
+	{   // activity on channel-select input
 		if (INTCON2bits.INTEDG3 && chan_tick < 252)
 		{
 			// rising edge on channel input (SelectB)
@@ -254,7 +295,6 @@ void app_isr_high(void)
 				else if (power_state() == 0)
 				{
 					power_incr = 1;
-					power_tick = 400; // timer to later update power to state 2
 				}
 			}
 			chan_tick = 3;
@@ -272,9 +312,11 @@ void app_isr_high(void)
 	if (PIE2bits.LVDIE && PIR2bits.LVDIF)
 	{
 		if (power_state() == 2)
+		{
 			power_incr = -1;
+			PIE2bits.LVDIE = 0; // we go power-down, prevent interrupt to repeat
+		}
 		PIR2bits.LVDIF = 0;
-		PIE2bits.LVDIE = 0; // we go power-down, prevent interrupt to repeat
 	}
 #ifdef UseIPEN
 }
@@ -358,19 +400,29 @@ static void init(void)
 	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
 	IPR3bits.TMR4IP = 1; // high priority interrupt
 	PIE3bits.TMR4IE = 1;
+
+	// setup Timer0 for InfraRed protocol reception
+	INTCON2bits.TMR0IP = 1; // high priority interrupt
+	INTCONbits.TMR0IE = 0; // for now, enabled on actual IR reception
+	T0CON = 0xc7; // Timer0 on, 8-bit mode, 256x prescale, on Fosc/4: 183Hz= 5.4msec timer interrupt
 	
 	// Volume rotary interrupt enable (on PortA, through PPS)
 	INTCON2bits.INTEDG2 = !VolA;
-	INTCON3bits.INT2IF = 0;
+	//INTCON3bits.INT2IF = 0;
 	INTCON3bits.INT2IP = 1;
-	INTCON3bits.INT2IE = 1;
+	INTCON3bits.INT2IE = 0; // just wait a while
 
 	// SelectB input: interrupt on falling edge for channel select increment
 	INTCON2bits.INTEDG3 = 0; //falling
-	INTCON3bits.INT3IF = 0;
+	//INTCON3bits.INT3IF = 0;
 	INTCON2bits.INT3IP = 1;
-	INTCON3bits.INT3IE = 1;
+	INTCON3bits.INT3IE = 0; // just wait a while
 
+	// IRreceiver input interrupt
+	INTCON2bits.INTEDG1 = 0; //falling
+	INTCON3bits.INT1IP = 1;
+	INTCON3bits.INT1IE = 0; // just wait a while
+	
 	// I2C master to drive relay board(s)
     // adapted from OpenI2C in C18/pmc_common library
   	SSP1STAT &= 0x3F;               // power on state 
@@ -384,7 +436,7 @@ static void init(void)
   	SSP1CON1bits.SSPEN = 1;         // enable synchronous serial port
 
 	// Set-up HVLD module: mute audio when power-supply unexpectedly drops
-	// Programmed HVLD value '1011' corrsponds to 2.9V (range 2.76 - 3.05)
+	// Programmed HVLD value '1001' corrsponds to 2.6V (range 2.47 - 2.73)
     // Take a small safety margin on that voltage level,
     // choosing it too low, can cause a too late audio mute.
     // (in time is as long as the audio opamps have reasonable supply voltage)
