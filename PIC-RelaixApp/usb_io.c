@@ -4,6 +4,7 @@
  *****************************************************************************/
 #include <p18cxxx.h>
 #include "typedefs.h"
+#include "usb_io.h"
  
 typedef union _BD_STAT
 {
@@ -331,4 +332,12 @@ int _user_putc (char c)
 {
 	usb_write( &c, 1);
 	return 1;
+}
+
+void byte2hex( char *dest, unsigned char data)
+{
+	unsigned char nibble = data & 0x0f;
+	dest[1] = hex(nibble);
+	data >>= 4;
+	dest[0] = hex(data);
 }

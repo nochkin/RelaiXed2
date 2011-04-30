@@ -13,6 +13,9 @@
 extern void usb_write(const char *buffer, byte len);
 extern byte usb_read(char *buffer, byte len);
 extern byte usb_state(void);
+void byte2hex( char *dest, unsigned char data);
+
+#define hex(i) (i + (i<=9 ? '0' : 'a'-10))
 
 
 #endif //USB_IO_H
