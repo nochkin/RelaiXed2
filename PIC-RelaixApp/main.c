@@ -98,6 +98,7 @@ void boot_isr_low(void)
 
 static BOOL prev_usb_bus_sense;
 static unsigned int volume_tick, usb_tick, chan_tick, power_tick, flash_tick, ir_tick;
+static char ir_received_ok;
 
 void main(void)
 {
@@ -174,6 +175,12 @@ void main(void)
 			power_update();
 		}
 
+		if (ir_received_ok)
+		{
+			ir_received_ok = 0;
+			ir_handle_code();
+		}
+
 		if (flash_tick == 1)
 		{
 			flash_tick = 0;
@@ -242,20 +249,20 @@ void app_isr_high(void)
 
 	if (INTCON3bits.INT1IE && INTCON3bits.INT1IF)
 	{   // edge on IR-receiver input
-		INTCON3bits.INT1IF = 0;
-		INTCON2bits.INTEDG1 = !IRserial;
-	
 		if (ir_tick == 0)
 		{	// the tick counter is to prevent a too high rate of processing volume/channel updates
 			ir_receiver_isr();
 		}
+
+		INTCON3bits.INT1IF = 0;
+		INTCON2bits.INTEDG1 = !IRserial;
 	}
 
 	if (INTCONbits.TMR0IE && INTCONbits.TMR0IF)
 	{	// IR receiver timer expires: end of IR pulse-train
 		// Might be a an unexpected termination on a bad signal reception
-		ir_tmr_isr();
-		ir_tick = 80;
+		ir_received_ok = ir_tmr_isr();
+		ir_tick = 30;
 		INTCONbits.TMR0IE = 0; // do this interrupt only once after IR pulse train.
 		INTCON2bits.INTEDG1 = 0; // a new pulse-train should start with a neg-edge.
 	}
