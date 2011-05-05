@@ -128,7 +128,7 @@ void channel_update(void)
 	while (channel > 6)
 		channel -= 6;
 	if (channel == 0)
-		channel = 1;
+		channel = 6;
 
 	set_relays(0x00, power, channel, master_volume, master_volume);
 
