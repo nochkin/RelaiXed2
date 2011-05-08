@@ -179,6 +179,10 @@ void main(void)
 		{
 			ir_received_ok = 0;
 			ir_handle_code();
+			if (power_incr)
+				ir_tick = 100;
+			else
+				flash_tick = 300;
 		}
 
 		if (flash_tick == 1)
@@ -260,9 +264,10 @@ void app_isr_high(void)
 
 	if (INTCONbits.TMR0IE && INTCONbits.TMR0IF)
 	{	// IR receiver timer expires: end of IR pulse-train
-		// Might be a an unexpected termination on a bad signal reception
+		// Might also be a an unexpected termination on a bad signal reception
 		ir_received_ok = ir_tmr_isr();
-		ir_tick = 30;
+		if (ir_received_ok)
+			ir_tick = 20;
 		INTCONbits.TMR0IE = 0; // do this interrupt only once after IR pulse train.
 		INTCON2bits.INTEDG1 = 0; // a new pulse-train should start with a neg-edge.
 	}

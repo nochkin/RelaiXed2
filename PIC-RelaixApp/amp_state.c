@@ -16,8 +16,9 @@ static char volume_incr_carry;
 
 volatile char channel_incr;
 volatile char power_incr;
+volatile char balance_incr;
 
-static char power;
+static char power, muted;
 
 static union store_volume
 {
@@ -56,6 +57,12 @@ void volume_update(void)
 
 	if (power < 2)
 		return;
+
+	if (muted)
+	{
+		muted = 0;
+		volume_incr = 0; // first unmute before changing volume setting
+	}
 
 	volume_incr_carry += volume_incr;
 	volume_incr = 0; // quick copy-and-reset: avoid intermediate interrupts
@@ -104,6 +111,25 @@ void volume_update(void)
 	usb_write( vol_msg, (byte)3); // three-char message
 }
 
+void mute(void)
+{
+	if (power != 2)
+		return;
+
+	muted = 1;
+	set_relays(0x00, power, 0x00, 0x00, 0x00);
+	display_set( 0x00, 0x00);	
+}
+
+void unmute(void)
+{
+	if (power != 2)
+		return;
+
+	volume_incr = 0;
+	volume_update();	
+}
+
 void channel_update(void)
 {
 	char chan_msg[] = {'C', '+', '0'};
@@ -135,6 +161,12 @@ void channel_update(void)
 	display_set_alt( DIGIT_C, channel, 2); // repeat channel-display twice
 
 	usb_write( chan_msg, (byte)3); // three-char message
+}
+
+void channel_set( unsigned char new_ch)
+{
+	channel_incr = new_ch - channel;
+	channel_update();
 }
 
 void power_update(void)
