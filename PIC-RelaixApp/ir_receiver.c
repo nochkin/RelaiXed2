@@ -102,11 +102,13 @@ char ir_tmr_isr(void)
 // numeric 0-9 : 0x00 - 0x09
 //    vol-  vol+ : 0x11 0x10
 //     ch-   ch+ : 0x21 0x20
+//   bal.l bal.r : 0x1b 0x1a
 //   mute  audio : 0x0d 0xcb
-//    stop  play : 0x6d 0x6e // RC5X
-//         power : 0x0c
+//    stop  play : 0x36 0x35
+//   pause power : 0x30 0x0c
 //    left right : 0x55 0x56 // RC5X
 //       down up : 0x51 0x50 // RC5X
+
 static char rc_got_half_period;
 static char rc_toggle;
 
@@ -145,8 +147,8 @@ static void rc5_receive(auto byte delay)
 // frame separation is  240T-58T is 80.9ms
 //
 // keycodes: 0-9 : 0x00 - 0x09
-//    vol-  vol+ : 0x5a 0x5b  (l,r)
-//     ch-   ch+ : 0x59 0x58  (d,u)
+//   left, right : 0x5a 0x5b  (ch-, ch+)
+//      down, up : 0x59 0x58  (vol-, vol+)
 //   pause audio : 0x30 0x4e
 //    stop  play : 0x31 0x2c
 //         power : 0x0c
@@ -180,6 +182,38 @@ static void rc6_receive(auto byte delay)
 		protocol = IR_error;
 }
 
+/////////////////////////////// SIRC ////////////////////////////////////////////
+// SIRC protocol:
+// T = 600 us, is 28 counts
+// frame is: leader,7xcommandbit,5xaddressbit
+// leader is: 4T light, T dark (is 113+28)
+// one is: 2T light, T dark    (is 56+28)
+// zero is: T light, T dartk   (is 28+28)
+// LSBs are transmitted first!!!
+//
+// keycodes: 0-9 : 0x09, 0x00 - 0x08
+//   left, right : 0x62 0x61
+//      down, up : 0x43 0x42
+//   pause audio : 0x19 0x17
+//    stop  play : 0x18 0x1a
+// standby power : 0x2f 0x15
+// power.on .off : 0x2e 0x2f
+//       menu ok : 0x54 0x5c
+//    vol-, vol+ : 0x13 0x12
+//  chan-, chan+ : 0x11 0x10
+//   bal.l bal.r : 0x26 0x27
+static void sirc_receive(auto byte delay)
+{
+	if (INTCON2bits.INTEDG1) // rising edge, we just measured the light duration
+	{
+		ircode >>= 1;
+		nbits++;
+		if (delay > 42)
+			ircode |= 0x8000;
+
+		nbits_ok = (nbits == 12 || nbits == 15);
+	}
+}
 // This receiver simply ignores all subsequent incoming IR edges
 static void error_receive(auto byte delay)
 {
@@ -228,7 +262,7 @@ void ir_receiver_isr(void)
 			usb_msg[2] = 'X';
 		}
 		// Philips RC6 starts 2664usec low, 888usec high (nominal 125 and 42)
-		else if (first_low >= 105 && first_low <= 145 &&
+		else if (first_low >= 110 && first_low <= 140 &&
 	             delay >= 35 && delay <= 50) // RC6 signal
 		{
 			protocol = IR_rc6;
@@ -237,7 +271,7 @@ void ir_receiver_isr(void)
 		}
 		// Sony SIRC starts 2400usec low, 600usec high (nominal 113 and 28)
 		else if (first_low >= 100 && first_low <= 130 &&
-	             delay >= 21 && delay <= 33) // RC6 signal
+	             delay >= 22 && delay <= 33) // RC6 signal
 		{
 			protocol = IR_sirc;
 			usb_msg[2] = 'S';
@@ -248,9 +282,9 @@ void ir_receiver_isr(void)
 			protocol = IR_unknown;
 		}
 
-		byte2hex( usb_msg+3, first_low);
-		byte2hex( usb_msg+5, delay);
-		usb_write( usb_msg, (byte)7); // I observe captured values are +/-2 accurate to nominal
+		//byte2hex( usb_msg+3, first_low);
+		//byte2hex( usb_msg+5, delay);
+		//usb_write( usb_msg, (byte)7); // I observe captured values are +/-2 accurate to nominal
 
 		break;
 	  default:
@@ -272,75 +306,167 @@ void ir_receiver_init(void)
 
 	// set-up array of function pointers, for quick decoding per protocol
 	protocol_handler[IR_unknown] = error_receive;
-	protocol_handler[IR_rc5] = rc5_receive; //rc5_receive;
+	protocol_handler[IR_rc5] = rc5_receive;
 	protocol_handler[IR_rc6] = rc6_receive;
-	protocol_handler[IR_sirc] = error_receive; //rc6_receive;
+	protocol_handler[IR_sirc] = sirc_receive;
 	protocol_handler[IR_error] = error_receive;
 }
 
-void ir_handle_code(void)
+// The codes of rc5 and rc6 are very similar, we share most if its decoding
+static void rc56_handle_code(void)
 {
-	byte keycode;
+	unsigned char keycode;
 
-	switch(final_protocol)
+	if (final_protocol == IR_rc6)
 	{
-	  case IR_rc6:
+		// rc_toggle was already extracted during receive
 		keycode = (byte)(final_ircode & 0x00ff);
-		switch (keycode)
-		{
-		  case 0x11:  // vol down
-		  case 0x59: // arrow down
-		    volume_incr = -2;
-			volume_update();
-			break;
-		  case 0x10:  // vol up
-		  case 0x58: // arrow up
-		    volume_incr = 2;
-			volume_update();
-			break;
-		  case 0x21:
-		  case 0x5a: // arrow left
-		    channel_incr = -1;
-			channel_update();
-			break;
-		  case 0x20:
-		  case 0x5b: // arrow right
-		    channel_incr = 1;
-			channel_update();
-			break;
-		  default:
-			break;
-		}
-	    break;
-
-	  case IR_rc5:
+	} else // rc5 or rc5x
+	{
+		rc_toggle = (final_ircode & 0x0800) != 0;
 		keycode = ((byte)final_ircode) & 0x003f;
 		if (final_ircode & 0x1000) // 13'th bit used for RC5X
 			keycode |= 0x40; // add as 7th command bit
-		switch (keycode)
-		{
-		  case 0x11:  // vol down
-		  case 0x51:  // arrow down
-		    volume_incr = -2;
-			volume_update();
-			break;
-		  case 0x10:  // vol up
-		  case 0x50:  // arrow up
-		    volume_incr = 2;
-			volume_update();
-			break;
-		  case 0x21:
-		    channel_incr = -1;
-			channel_update();
-			break;
-		  case 0x20:
-		    channel_incr = 1;
-			channel_update();
-			break;
-		  default:
-			break;
-		}
+	}
+
+	switch (keycode)
+	{
+	  case 0x11: // vol down
+	  case 0x59: // arrow down (rc6)
+	  case 0x51: // arrow down (rc5x)
+	    volume_incr = -2;
+		break;
+	  case 0x10: // vol up
+	  case 0x50: // arrow up (rc5x)
+	  case 0x58: // arrow up (rc6)
+	    volume_incr = 2;
+		break;
+	  case 0x21: // chan-
+	    channel_incr = -1;
+		break;
+	  case 0x20: // chan+
+	    channel_incr = 1;
+		break;
+	  case 0x1b: // balance left
+	  case 0x5a: // arrow left (rc6)
+	    balance_incr = -2;
+		break;
+	  case 0x1a: // balance right
+	  case 0x5b: // arrow right (rc6)
+	    balance_incr = 2;
+		break;
+	  case 0x30: // pause
+	  case 0x0d:
+	  case 0x36: // stop rc5
+	  case 0x31: // stop rc6
+		mute();
+		break;
+	  case 0x35: // play rc5
+	  case 0x2c: // play rc6
+		unmute();
+		break;
+	  case 0x01:
+	  case 0x02:
+	  case 0x03:
+	  case 0x04:
+	  case 0x05:
+	  case 0x06:
+		channel_set(keycode);
+		break;
+	  case 0x0c: // power/standby
+		if (power_state() == 0)
+			power_incr = 1;
+		else if (power_state() == 2)
+			power_incr = -1;
+	  default:
+		break;
+	}
+}
+
+static void sirc_handle_code(void)
+{
+	unsigned char keycode;
+
+    if (final_nbits == 12)
+		final_ircode >>= 4;
+	else // final_nbits == 15
+		final_ircode >>= 1;
+
+	keycode = (byte)(final_ircode & 0x007f);
+	switch(keycode)
+	{
+	  case 0x00:
+	  case 0x01:
+	  case 0x02:
+	  case 0x03:
+	  case 0x04:
+	  case 0x05:
+		channel_set(keycode+1);
+		break;
+	  case 0x13: // vol down
+	  case 0x75: // arrow down
+	  case 0x43: // arrow down
+	    volume_incr = -2;
+		break;
+	  case 0x12: // vol up
+	  case 0x74: // arrow up
+	  case 0x42: // arrow up
+	    volume_incr = 2;
+		break;
+	  case 0x11:
+	    channel_incr = -1;
+		break;
+	  case 0x10:
+	    channel_incr = 1;
+		break;
+	  case 0x26: // balance.left
+	  case 0x34: // arrow left
+	  case 0x62: // arrow left
+		balance_incr = -2;
 	    break;
+	  case 0x27: // balance.right
+	  case 0x33: // arrow right
+	  case 0x61: // arrow right
+		balance_incr = 2;
+	    break;
+	  case 0x19: // pause
+	  case 0x18: // stop
+		mute();
+		break;
+	  case 0x1a: // play (unmute)
+		unmute();
+		break;
+	  case 0x15: // power
+		if (power_state() == 0)
+			power_incr = 1;
+		else if (power_state() == 2)
+			power_incr = -1;
+		break;
+	  case 0x2e: // power.on
+		if (power_state() == 0)
+			power_incr = 1;
+		break;
+	  case 0x2f: // power.off, standby
+		if (power_state() == 2)
+			power_incr = -1;
+		break;
+	  default:
+		break;
+	}
+}
+
+// ir_handle is called from main loop, to process succesfully captured IR frames
+void ir_handle_code(void)
+{
+	switch(final_protocol)
+	{
+	  case IR_rc6:
+	  case IR_rc5:
+		rc56_handle_code();
+		break;
+	  case IR_sirc:
+		sirc_handle_code();
+		break;
 	  default:
 	    break;
 	}
