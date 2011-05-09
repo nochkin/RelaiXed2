@@ -1347,12 +1347,10 @@ namespace HIDBootLoader {
 			res=true;
 			while (res && ErrorStatus == ERROR_SUCCESS && LogThreadResults == LOG_RUNNING)
 			{
-				//unsigned char line[10000];
 				// This loop typically ends due to clicking 'stoplogging': the main thread causes my pending read to ABORT.
 				// Just to be sure, the main thread will also set the LogThreadResults to LOG_TERMINATE
 				DWORD BytesReceived = 0;
 				res = ReadFile(ReadHandleToMyDevice, LogBuf[LogReadInx].RawData, 65, &BytesReceived, 0);
-				//res = ReadFile(ReadHandleToMyDevice, line, 65, &BytesReceived, 0);
 
 				if (res)
 				{
@@ -1413,13 +1411,6 @@ namespace HIDBootLoader {
 		private: System::Void ckbox_ConfigWordProgramming_CheckedChanged(System::Object^  sender, System::EventArgs^  e) 
 		{
 			//listBox1->Items->Clear();
-
-			if(ckbox_ConfigWordProgramming->Checked)
-			{
-				btn_LogDevice_restore = false;
-				ENABLE_PRINT();
-				PRINT_STATUS("Disabling Logging functionality");
-			}
 
 			//Check to see if there is already an instance of a thread
 			if(UnlockConfigThread)
@@ -3260,10 +3251,7 @@ namespace HIDBootLoader {
 					//If the hex file completed successfully, then enable any buttons
 					//  that are valid now that we have loaded data.
 					btn_ProgramVerify_restore = true;
-					if(ckbox_ConfigWordProgramming->Checked == FALSE)
-					{
-						btn_LogDevice_restore = true;
-					}
+					btn_LogDevice_restore = true;
 					btn_ExportHex_restore = true;
 					btn_Verify_restore = true;
 				}
@@ -4464,6 +4452,8 @@ namespace HIDBootLoader {
 				  }
 
 				unlockStatus = false;
+				this->btn_LogDevice->Text = L"Log Device";
+				btn_LogDevice->Enabled = false;
 
 				#if !defined(DEBUG_BUTTONS)
 				  btn_OpenHexFile_restore = false;
@@ -5037,8 +5027,9 @@ namespace HIDBootLoader {
 							{
 								String^ s;
 							    s = "Region";
-								s=String::Concat(s, " Address=0x", HexToString(memoryRegions[memRegionIndexShown].Address, 3));
-								s=String::Concat(s, " Size=0x", HexToString(memoryRegions[memRegionIndexShown].Size, 3));
+								s=String::Concat(s, " Address 0x", HexToString(memoryRegions[memRegionIndexShown].Address, 3));
+								s=String::Concat(s, " to 0x", HexToString(memoryRegions[memRegionIndexShown].Address +
+																	      memoryRegions[memRegionIndexShown].Size - 1, 3));
 								ENABLE_PRINT();
 								PRINT_STATUS(s)
 								memRegionIndexShown++;
@@ -5275,6 +5266,7 @@ namespace HIDBootLoader {
 							unsigned long tempLong;
 							unsigned char *tempPointer;
 							bool mallocFailed;
+							DWORD lowest_region_addr;
 
 							//If the query was successful, notify the user
 							//ENABLE_PRINT();
@@ -5310,6 +5302,7 @@ namespace HIDBootLoader {
 							{
 								loopCounter=0;
 							}
+							lowest_region_addr = 0x7fffffff;
 							//For each of the memory regions detected
 							for(loopCounter=0;loopCounter<memoryRegionsDetected;loopCounter++)
 							{
@@ -5318,6 +5311,10 @@ namespace HIDBootLoader {
 								//Get the size of the data
 								size = memoryRegions[loopCounter].Size;
 								b = bytesPerAddress;
+
+								// Keep track of lowest available device address
+								if (memoryRegions[loopCounter].Address < lowest_region_addr)
+									lowest_region_addr = memoryRegions[loopCounter].Address;
 
 								//Allocate enough memory for the memory region
 								pData = (unsigned char*)malloc((memoryRegions[loopCounter].Size + 1) * bytesPerAddress);
@@ -5365,6 +5362,12 @@ namespace HIDBootLoader {
 								QueryThreadResults = QUERY_IDLE;
 								inTimer = false;
 								return;
+							} else
+							{
+								//If the query and allocations were successful, notify the user
+								ENABLE_PRINT();
+								PRINT_STATUS(String::Concat("Device query OK: Bootloader protected below address=0x",
+														    HexToString(lowest_region_addr, 3)));
 							}
 
 							//If all of the memory allocations where successful
