@@ -184,6 +184,17 @@ void main(void)
 	INTCONbits.GIE = 1;  // Allow all interrupts
 	INTCONbits.PEIE = 1; // including the USB device interrupts
 #endif
+
+	if (usb_device_state >= 1 && !PORTAbits.RA5)
+	{
+		// Fail-safe start-up mode: USB connected && channel-button pressed on power-up
+		// Only needed if uploaded app is corrupt (e.g. erased)
+		mLED_1_On();
+		while(usb_device_state >= 1)
+			; // stay here until reset or not USB-connected		
+	}
+
+	// Normal mode: with USB connection or not, goto Relaixed app
 	_asm
 		goto ProgramMemStart			// Assume the user app has its own main loop.
 	_endasm
