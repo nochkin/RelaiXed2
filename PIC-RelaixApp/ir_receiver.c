@@ -9,6 +9,8 @@
 #include "usb_io.h"
 #include "ir_receiver.h"
 #include "amp_state.h"
+#include "display.h"
+#include "storage.h"
 
 
 /***************************
@@ -37,8 +39,24 @@ typedef enum
     IR_error
 } IRprotocol;
 
+static union store_IR
+{
+	struct
+	{
+		StorageKey key;
+		byte	_protocol;
+		byte	_device;
+		byte	_flags;
+	};
+	unsigned int words[2];
+} StoreIR;
+#define flash_protocol StoreIR._protocol
+#define flash_device   StoreIR._device
+
+
 static unsigned char nbits, nedges, nbits_ok, final_nbits;
-static unsigned short ircode, final_ircode;
+static unsigned char device_prog_state;
+static unsigned short ircode, final_ircode, device;
 static IRprotocol protocol, final_protocol;
 
 static near rom void (*protocol_handler[5])(auto byte);
@@ -302,6 +320,7 @@ void ir_receiver_init(void)
 	nbits = 0;
 	nedges = 0;
     nbits_ok = 0;
+	device_prog_state = 1; // allow state upgrade during power-up
 	protocol = IR_unknown;
 
 	// set-up array of function pointers, for quick decoding per protocol
@@ -310,6 +329,28 @@ void ir_receiver_init(void)
 	protocol_handler[IR_rc6] = rc6_receive;
 	protocol_handler[IR_sirc] = sirc_receive;
 	protocol_handler[IR_error] = error_receive;
+
+	// fetch initial setup from flash memory
+	flash_load(KeyIR, &StoreIR.key);
+}
+
+// We recognized a special key-sequence on power-up,
+// and thereby fix the recognized protocol and device-number in flash:
+// The device will react only on this protocol+device code from now on
+// (Unless this code is re-programmed by a next key-sequence on power-up.)
+static void freeze_ir_device(void)
+{
+	char usb_frz_msg[] = {'I', 'R', 'f', 'r', 'e', 'e', 'z', 'e', '5', '0', '0'};
+
+	flash_protocol = final_protocol;
+	flash_device = device;
+	flash_store( KeyIR, (unsigned int *)StoreIR.words);
+
+	display_set_alt( DIGIT_r, DIGIT_c, 2); // repeat channel-display twice
+
+	usb_frz_msg[8] = (final_protocol == IR_sirc) ? 'S' : (final_protocol == IR_rc6) ? '6' : '5';
+	byte2hex( usb_frz_msg+9, device);
+	usb_write( usb_frz_msg, (byte)11);
 }
 
 // The codes of rc5 and rc6 are very similar, we share most if its decoding
@@ -321,13 +362,25 @@ static void rc56_handle_code(void)
 	{
 		// rc_toggle was already extracted during receive
 		keycode = (byte)(final_ircode & 0x00ff);
+		device = (byte)(final_ircode >> 8);
 	} else // rc5 or rc5x
 	{
 		rc_toggle = (final_ircode & 0x0800) != 0;
 		keycode = ((byte)final_ircode) & 0x003f;
 		if (final_ircode & 0x1000) // 13'th bit used for RC5X
 			keycode |= 0x40; // add as 7th command bit
+		device = (byte)(final_ircode >> 6) && 0x3f;
 	}
+
+	// The IR command is decoded for further processing in either one of the following cases:
+	// - the protocol and device code matches the stored values in flash
+	// - the flash protocol/device are not (yet) fixed
+	// - the power_state is still '1' and want to allow fixing a new protocol/device in flash
+	// Note however, the decoded action is likely suppressed in Relaixed state updates if the power_state()<2
+
+	if (flash_protocol > IR_unknown && device_prog_state == 0 && // some protocol can be re-assigned
+		(flash_protocol != final_protocol || flash_device != device))
+		return;
 
 	switch (keycode)
 	{
@@ -335,11 +388,15 @@ static void rc56_handle_code(void)
 	  case 0x59: // arrow down (rc6)
 	  case 0x51: // arrow down (rc5x)
 	    volume_incr = -2;
+		if (device_prog_state == 2)
+			device_prog_state = 3; // support fixing the device-code during power-up
 		break;
 	  case 0x10: // vol up
 	  case 0x50: // arrow up (rc5x)
 	  case 0x58: // arrow up (rc6)
 	    volume_incr = 2;
+		if (device_prog_state == 1)
+			device_prog_state = 2; // support fixing the device-code during power-up
 		break;
 	  case 0x21: // chan-
 	    channel_incr = -1;
@@ -393,6 +450,12 @@ static void sirc_handle_code(void)
 		final_ircode >>= 1;
 
 	keycode = (byte)(final_ircode & 0x007f);
+	device = (byte)(final_ircode >> 7);
+
+	if (flash_protocol > IR_unknown && device_prog_state == 0 && // some protocol was selected/stored before
+		(flash_protocol != final_protocol || flash_device != device))
+		return;
+
 	switch(keycode)
 	{
 	  case 0x00:
@@ -407,11 +470,15 @@ static void sirc_handle_code(void)
 	  case 0x75: // arrow down
 	  case 0x43: // arrow down
 	    volume_incr = -2;
+		if (device_prog_state == 2)
+			device_prog_state = 3; // support fixing the device-code during power-up
 		break;
 	  case 0x12: // vol up
 	  case 0x74: // arrow up
 	  case 0x42: // arrow up
 	    volume_incr = 2;
+		if (device_prog_state == 1)
+			device_prog_state = 2; // support fixing the device-code during power-up
 		break;
 	  case 0x11:
 	    channel_incr = -1;
@@ -470,4 +537,11 @@ void ir_handle_code(void)
 	  default:
 	    break;
 	}
+
+	if (device_prog_state == 3 && power_state() != 0)
+	{
+		freeze_ir_device();
+		device_prog_state = 0; // reset to inactive
+	} else if (power_state() != 1)
+		device_prog_state = 0; // reset to inactive
 }

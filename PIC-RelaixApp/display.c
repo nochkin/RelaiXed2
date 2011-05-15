@@ -22,7 +22,9 @@ static rom near char segment_table[] = {
 	119 /* '-' */,
 	48  /* 'P' */,
 	127 /* ' ' */,
-	12  /* 'U' */
+	12  /* 'U' */,
+	55  /* 'r' */,
+	39  /* 'c' */
 };
 
 // Display refresh, called from isr on TMR4 wraparound, at 183Hz rate

@@ -29,7 +29,7 @@ static rom near StorageKey *current_page;
 static rom near StorageKey *key_ptr[MAX_KEYS];
 static unsigned char curr_page_nr;
 
-static const unsigned char key_packet_sz[MAX_KEYS] = {16, 16, 16, 4};
+static const unsigned char key_packet_sz[MAX_KEYS] = {16, 4, 16, 4};
 static union
 {
 	char chars[16];

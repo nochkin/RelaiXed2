@@ -119,7 +119,7 @@ void main(void)
 	ir_receiver_init();
 	storage_init();
 	relay_boards_init();
-	set_relays(0x00, 0x01, 0x00, 0x00, 0x00);
+	set_relays(0x00, 0x00, 0x00, 0x00, 0x00);
 	amp_state_init();
 
 	// Globally enable interrupts
@@ -136,15 +136,16 @@ void main(void)
 	usb_write( init_msg, (byte)4);
 
 	// The above 'set_relays' enabled the power relay for the analog supply.
-	// Set a timer to later undo the mute and activate last volume setting.
-	// power==0 now, from amp_state_init().
-	// incr now quickly to 1, and later to 2.
-	power_incr = 1;
-	power_tick = 400;
+	power_tick = 100;
 
+	// Set a timer to later undo the mute and activate last volume setting.
 	// wait some time for stabilization before enabling all other interrupts
-	while (power_tick > 350)
+	while (power_tick > 0)
 		; // gets decreased on timer interrupts
+
+	// power==0 now, from amp_state_init().
+	// incr power now quickly to 1, and later to 2.
+	power_incr = 1;
 
 	INTCON3bits.INT1IF = 0;
 	INTCON3bits.INT1IE = 1;
@@ -170,7 +171,7 @@ void main(void)
 			} else if (power_incr > 0 && power_state() == 0)
 			{
 				// if we move power_state from 0 to 1, we surely want to go later to 2
-				power_tick = 400;
+				power_tick = 500;
 			}
 			power_update();
 		}
@@ -206,7 +207,7 @@ void check_usb_power(void)
 	if (usb_tick == 0xFF)
 	{
 		prev_usb_bus_sense = HasUSB;
-		display_set_alt( DIGIT_U, (HasUSB ? 1 : 0), 3);
+		display_set_alt( DIGIT_U, (HasUSB ? 1 : 0), 2);
 		PIR2bits.USBIF = 1; // enter USB code through interrupt
 	}
 }	

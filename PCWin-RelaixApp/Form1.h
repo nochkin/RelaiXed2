@@ -4452,6 +4452,10 @@ namespace HIDBootLoader {
 				  }
 
 				unlockStatus = false;
+
+				// JvE: The following two lines on LogDevice are DIRTY: this button reset
+				// should have been done when the logthread was terminated.
+				// Right now not sure how/when that happens when the USB is unplugged during Log mode....
 				this->btn_LogDevice->Text = L"Log Device";
 				btn_LogDevice->Enabled = false;
 
