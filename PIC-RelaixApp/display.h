@@ -17,6 +17,8 @@ extern volatile byte display_cnt; // increments on every display refresh (is at 
 #define DIGIT_P     17
 #define DIGIT_dark  18
 #define DIGIT_U     19
+#define DIGIT_r     20
+#define DIGIT_c     21
 
 extern void display_isr(void);
 extern void display_set(byte digit_hi, byte digit_lo);

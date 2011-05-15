@@ -188,7 +188,6 @@ void power_update(void)
         // set volume-state down AFTER power-state down,
         // otherwise an interrupt-flash-tick might store a (wrong) 0 volume to flash
 		power = 0;
-		power_incr = 0;
 		master_volume = 0; 
 		volume_incr_carry = 0;
 		set_relays(0x00, 0x00, 0x00, 0x00, 0x00);
