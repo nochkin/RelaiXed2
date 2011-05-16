@@ -17,6 +17,7 @@ static char volume_incr_carry;
 volatile char channel_incr;
 volatile char power_incr;
 volatile char balance_incr;
+static char balance_incr_carry;
 
 static char power, muted;
 
@@ -26,7 +27,7 @@ static union store_volume
 	{
 		StorageKey key;
 		byte	_volume;
-		byte	_balance;
+		char	_balance; // signed
 		byte	_channel;
 	};
 	unsigned int words[2];
@@ -34,7 +35,7 @@ static union store_volume
 
 #define master_volume	StoreVolume._volume
 #define channel			StoreVolume._channel
-#define balance			StoreVolume._balance
+#define master_balance	StoreVolume._balance
 
 // Input selection channels: numbered 0 .. 5
 #define NCHANNELS 6
@@ -43,12 +44,39 @@ void amp_state_init(void)
 {
 	volume_incr = 0;
     volume_incr_carry = 0;
+	balance_incr = 0;
+    balance_incr_carry = 0;
 	power_incr = 0;
 	channel_incr = 0;
 	channel = 0;
 	power = 0;
 }	
- 
+
+static void set_volume_balance_relays(void)
+{
+	char balance_left, balance_right;
+	char volume_left, volume_right;
+
+	if (master_volume == 0 || channel == 0 || power == 0)
+	{
+		// Don't let balance-computations result in non-zero volume
+		set_relays(0x00, power, channel, 0x00, 0x00);
+		return;
+	}
+
+	// Hmm... Microchip's C compiler wrongly implements signed >>
+	balance_right = (master_balance >> 1) | (master_balance & 0x80);
+	balance_left  = balance_right - master_balance;
+	volume_right  = (char)master_volume + balance_right;
+	volume_left   = (char)master_volume + balance_left;
+
+	if (volume_right > 64) volume_right = 64;
+	if (volume_left  > 64) volume_left  = 64;
+	if (volume_right <  0) volume_right = 0;
+	if (volume_left  <  0) volume_left  = 0;
+	set_relays(0x00, power, channel, volume_left, volume_right);
+}
+
 void volume_update(void)
 {
 	byte vol_div_10, vol_by_10, vol_mod_10;
@@ -99,7 +127,7 @@ void volume_update(void)
 	if (master_volume > 64)
 		master_volume = 0; // weird, flash_load error?
 
-	set_relays(0x00, power, channel, master_volume, master_volume);
+	set_volume_balance_relays();
 	
 	vol_div_10 = 0;
 	for (vol_by_10 = 10; vol_by_10 <= master_volume; vol_by_10 += 10)
@@ -109,6 +137,42 @@ void volume_update(void)
 	display_set( vol_div_10, vol_mod_10);
 
 	usb_write( vol_msg, (byte)3); // three-char message
+}
+
+void balance_update(void)
+{
+	if (power < 2 || muted)
+		return;
+
+	// Similar carefull updating as for volume...
+	balance_incr_carry += balance_incr;
+	balance_incr = 0; // quick copy-and-reset: avoid intermediate interrupts
+
+	while (balance_incr_carry >= 2)
+	{
+		if (master_balance < 9)
+			master_balance++;
+
+		balance_incr_carry -= 2;		
+	}
+
+	while (balance_incr_carry <= -2)
+	{
+		if (master_balance > -9)
+			master_balance--;
+
+		balance_incr_carry += 2;		
+	}
+
+	set_volume_balance_relays();
+
+	if (master_balance >= 0)
+	{
+		display_set_alt( DIGIT_dark, master_balance, 2);
+	} else
+	{
+		display_set_alt( DIGIT_minus, -master_balance, 2);
+	}
 }
 
 void mute(void)
