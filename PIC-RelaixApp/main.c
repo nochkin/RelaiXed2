@@ -159,6 +159,9 @@ void main(void)
 		if (volume_incr)
 			volume_update();
 
+		if (balance_incr)
+			balance_update();
+
 		if (channel_incr)
 			channel_update();
 
@@ -183,7 +186,7 @@ void main(void)
 			if (power_incr)
 				ir_tick = 100;
 			else
-				flash_tick = 300;
+				flash_tick = 400;
 		}
 
 		if (flash_tick == 1)
@@ -277,13 +280,24 @@ void app_isr_high(void)
 	{   // edge on VolA input: check edge-direction of VolA against VolB value:
 		if (volume_tick == 0)
 		{
-			if (INTCON2bits.INTEDG2 == VolB)
-				volume_incr -= 1;
-			else
-				volume_incr += 1;
+			if (INTCON2bits.INTEDG3 == 1) //channel-button is pressed
+			{
+				if (INTCON2bits.INTEDG2 == VolB)
+					balance_incr -= 1;
+				else
+					balance_incr += 1;
+				
+				chan_tick = 0; // No special action on channel-button release
+			} else
+			{
+				if (INTCON2bits.INTEDG2 == VolB)
+					volume_incr -= 1;
+				else
+					volume_incr += 1;
+			}
 		
         	volume_tick = 2; // create delay
-			flash_tick = 300;
+			flash_tick = 400;
 		}
 		INTCON2bits.INTEDG2 = !VolA;
 		INTCON3bits.INT2IF = 0;
@@ -293,11 +307,14 @@ void app_isr_high(void)
 	{   // activity on channel-select input
 		if (INTCON2bits.INTEDG3 && chan_tick < 252)
 		{
-			// rising edge on channel input (SelectB)
+			// rising edge on channel input (release of SelectB)
 			if (chan_tick == 0)
 			{
 				// did already do power-down a while ago
-			}
+			} else if (balance_incr)
+			{
+				// adjusted balance while pressed: don't modify channel
+			}			
 			else
 			{ // quick release: do next channel
 				if (power_state() == 2)

@@ -406,10 +406,12 @@ static void rc56_handle_code(void)
 		break;
 	  case 0x1b: // balance left
 	  case 0x5a: // arrow left (rc6)
+	  case 0x55: // arrow left (rc5x)
 	    balance_incr = -2;
 		break;
 	  case 0x1a: // balance right
 	  case 0x5b: // arrow right (rc6)
+	  case 0x56: // arrow right (rc5x)
 	    balance_incr = 2;
 		break;
 	  case 0x30: // pause
