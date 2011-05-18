@@ -39,7 +39,7 @@
 void app_isr_high(void);
 void app_isr_low(void);
 void main(void);
-void check_usb_power(void);
+void check_usb_power(char);
 static void init(void);
 
 #ifdef __DEBUG
@@ -103,7 +103,7 @@ static char ir_received_ok;
 void main(void)
 {
 	unsigned int i;
-	char usb_char;
+	char usb_char, err;
 	const char init_msg[] = {'I', 'N', 'I', 'T'};
 	extern FILE *stdout = _H_USER;  // redirect stdout to USB
 	
@@ -118,9 +118,12 @@ void main(void)
 	display_set_alt( 0x00, 0x00, 0x00);
 	ir_receiver_init();
 	storage_init();
-	relay_boards_init();
+	err = relay_boards_init();
 	set_relays(0x00, 0x00, 0x00, 0x00, 0x00);
 	amp_state_init();
+
+	if (err)
+		display_set_alt( DIGIT_E, 0x01, 3);
 
 	// Globally enable interrupts
 #ifdef UseIPEN
@@ -136,7 +139,7 @@ void main(void)
 	usb_write( init_msg, (byte)4);
 
 	// The above 'set_relays' enabled the power relay for the analog supply.
-	power_tick = 100;
+	power_tick = 150;
 
 	// Set a timer to later undo the mute and activate last volume setting.
 	// wait some time for stabilization before enabling all other interrupts
@@ -159,7 +162,8 @@ void main(void)
 		if (volume_incr)
 			volume_update();
 
-		if (balance_incr)
+		if (balance_incr > 1 || balance_incr < -1)
+			// suppress a single tick, might have been by accident
 			balance_update();
 
 		if (channel_incr)
@@ -169,6 +173,7 @@ void main(void)
 		{
 			if (flash_tick && power_incr < 0)
 			{
+				// quickly save recent volume/balance update
 				flash_tick = 0;
 				flash_volume_channel();
 			} else if (power_incr > 0 && power_state() == 0)
@@ -196,11 +201,11 @@ void main(void)
 		}
 
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
-		check_usb_power();
+		check_usb_power(err);
 	}
 }
 
-void check_usb_power(void)
+void check_usb_power(char err)
 {
 	if (HasUSB == prev_usb_bus_sense)
 		usb_tick = 0;
@@ -210,7 +215,8 @@ void check_usb_power(void)
 	if (usb_tick == 0xFF)
 	{
 		prev_usb_bus_sense = HasUSB;
-		display_set_alt( DIGIT_U, (HasUSB ? 1 : 0), 2);
+		if (!err) // don't conceal earlier error on display
+			display_set_alt( DIGIT_U, (HasUSB ? 1 : 0), 2);
 		PIR2bits.USBIF = 1; // enter USB code through interrupt
 	}
 }	
@@ -287,7 +293,8 @@ void app_isr_high(void)
 				else
 					balance_incr += 1;
 				
-				chan_tick = 0; // No special action on channel-button release
+				if (balance_incr > 1 || balance_incr < -1)
+					chan_tick = 0; // Suppress channel or power action on button release
 			} else
 			{
 				if (INTCON2bits.INTEDG2 == VolB)
@@ -311,10 +318,8 @@ void app_isr_high(void)
 			if (chan_tick == 0)
 			{
 				// did already do power-down a while ago
-			} else if (balance_incr)
-			{
-				// adjusted balance while pressed: don't modify channel
-			}			
+				// or knob-turning created this into just balance adjust
+			}
 			else
 			{ // quick release: do next channel
 				if (power_state() == 2)

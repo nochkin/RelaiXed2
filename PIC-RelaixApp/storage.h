@@ -3,7 +3,7 @@
  * A] to save state like volume and channel when power is switched-off
  * B] to save IR receiver protocol choices
  *********************************************************************/
-#define MAX_KEYS 5
+#define MAX_KEYS 4
 
 typedef enum
 {

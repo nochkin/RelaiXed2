@@ -57,7 +57,7 @@ static void set_volume_balance_relays(void)
 	char balance_left, balance_right;
 	char volume_left, volume_right;
 
-	if (master_volume == 0 || channel == 0 || power == 0)
+	if (master_volume == 0 || channel == 0 || power == 0 || muted != 0)
 	{
 		// Don't let balance-computations result in non-zero volume
 		set_relays(0x00, power, channel, 0x00, 0x00);
@@ -220,7 +220,7 @@ void channel_update(void)
 	if (channel == 0)
 		channel = 6;
 
-	set_relays(0x00, power, channel, master_volume, master_volume);
+	set_volume_balance_relays();
 
 	display_set_alt( DIGIT_C, channel, 2); // repeat channel-display twice
 
@@ -266,12 +266,12 @@ void power_update(void)
 	{
 		power = 2;
 		flash_load(KeyVolume, &StoreVolume.key);
-		if (master_volume > 64)
-			master_volume = 0;
 		volume_incr = 0;
 		channel_incr = 0;
-		volume_update();
-		channel_update();
+		balance_incr = 0;
+		muted = 0;
+		volume_update();  // shows volume in display
+		channel_update(); // shows channel in temporary display
 
 		PIR2bits.LVDIF = 0;
 		PIE2bits.LVDIE = 1; // watch power-supply level for drops

@@ -44,6 +44,7 @@ static rom StorageKey storage_area[N_PAGES*FLASH_ERASE_BLOCK];
 
 static unsigned long flash_new_page(void);
 
+// find pointers into flash space that store Relaixed state variables
 void storage_init(void)
 {
 	rom near StorageKey *p;
