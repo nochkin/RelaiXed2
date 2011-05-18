@@ -28,16 +28,19 @@ static unsigned char writeI2C( unsigned char data_out )
 
 // Configure mode and initial conditions in the
 // I2C receiver (MCP23017) in the relay board(s)
-void relay_boards_init(void)
+char relay_boards_init(void)
 {
+	char err;
 	// Leave IOCON reg is default (=0) state: has auto address increment
 	// Set both port A and B as all-output
 	StartI2C();
-	writeI2C(0x40) || // address MCP23017 on board with addr/id 0
-	writeI2C(0x00) || // select on-chip register addr 0;
-	writeI2C(0x00) || // IODIRA = 0 (all output)
-	writeI2C(0x00); // IODIRB = 0 (all output)
+	err = writeI2C(0x40) || // address MCP23017 on board with addr/id 0
+		writeI2C(0x00) || // select on-chip register addr 0;
+		writeI2C(0x00) || // IODIRA = 0 (all output)
+		writeI2C(0x00); // IODIRB = 0 (all output)
 	StopI2C();
+
+	return err;
 }
 
 void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
