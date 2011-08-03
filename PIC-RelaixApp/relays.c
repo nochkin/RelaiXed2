@@ -43,14 +43,25 @@ char relay_boards_init(void)
 	return err;
 }
 
+void mcp23017_output(byte chip_addr, WORD data)
+{
+	StartI2C();
+	writeI2C(chip_addr);
+	writeI2C(0x12); // addr of GPIOA register
+	writeI2C(MSB(data)); // to GPA[0..7]
+	writeI2C(LSB(data)); // to GPB[0..7]
+	StopI2C();
+}
+
 void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
 {
 	// 'power' off is 0, non-zero is power on.
 	// channel is 1..6 for input selection, 0 for mute
 	// vol_[rl] ranges from 0..64
 	byte chip_addr;
-	byte i2c_portA, i2c_portB;
+	WORD i2c_data, i2c_tmp;
 	char i2c_msg[9] = {'I','2','C',':','0','0',',','0','0'};
+    static WORD i2c_prev = 0;
 
 	board_id = 0; // for now....
 
@@ -71,25 +82,33 @@ void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
 	}
 
 	// encode new state in 16-bit word for relay board state
-	i2c_portB = (vol_r << 6) | vol_l;
-	i2c_portA = (channel << 4) | (vol_r >> 2);
+	LSB(i2c_data) = (vol_r << 6) | vol_l;
+	MSB(i2c_data) = (channel << 4) | (vol_r >> 2);
 	if (power)
-		i2c_portA |= 0x80;
+		MSB(i2c_data) |= 0x80;
 
 	/////////////////// Perform I2C transmission /////////////////////
 	chip_addr = 0x40 | (board_id << 1);
-	StartI2C();
-	writeI2C(chip_addr);
-	writeI2C(0x12); // addr of GPIOA register
-	writeI2C(i2c_portA);
-	writeI2C(i2c_portB);
-	StopI2C();
 
+	i2c_tmp._word = i2c_data._word & i2c_prev._word;
+	if (i2c_tmp._word != i2c_data._word && i2c_tmp._word != i2c_prev._word)
+	{
+		// first issue an intermediate value, to prevent high-volume audio
+		// bursts in the output during the relay switch time
+		unsigned int count;
+
+		mcp23017_output(chip_addr, i2c_tmp);
+		for (count=0; count < 4000L; count++)
+				; // wait-loop for about 5 msec. Not beautiful, using a timer would be nicer
+	}
+	mcp23017_output(chip_addr, i2c_data);
+	i2c_prev = i2c_data;
+
+
+	//////////////////// Log output to USB if logging is on /////////////////
 	// vsprintf( i2c_msg, "I2C:%02x,%02x", i2c_portA, i2c_portB); why not OK??
-	i2c_msg[5] = '0' + (i2c_portA & 0x0f);
-	i2c_msg[4] = '0' + ((i2c_portA >> 4) & 0x0f);
-	i2c_msg[8] = '0' + (i2c_portB & 0x0f);
-	i2c_msg[7] = '0' + ((i2c_portB >> 4) & 0x0f);
-	usb_write( i2c_msg, (byte)9);
+	byte2hex(i2c_msg+4, MSB(i2c_data));
+	byte2hex(i2c_msg+7, LSB(i2c_data));
+	usb_write(i2c_msg, (byte)9);
 }
 	
