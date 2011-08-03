@@ -74,6 +74,7 @@ static void set_volume_balance_relays(void)
 	if (volume_left  > 64) volume_left  = 64;
 	if (volume_right <  0) volume_right = 0;
 	if (volume_left  <  0) volume_left  = 0;
+
 	set_relays(0x00, power, channel, volume_left, volume_right);
 }
 
