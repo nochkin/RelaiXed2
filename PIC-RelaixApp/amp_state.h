@@ -9,6 +9,7 @@ extern volatile char power_incr;
 extern volatile char balance_incr;
 
 extern void amp_state_init(void);
+extern void volume_display(char override);
 extern void volume_update(void);
 extern void balance_update(void);
 extern void channel_update(void);

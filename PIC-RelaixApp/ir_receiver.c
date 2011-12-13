@@ -1,7 +1,24 @@
+/****************************************************************************************
+	This file is part of the Relaixed firmware.
+    The Relaixed firmware is intended to control a DIY audio premaplifier.
+    Copyright 2011 Jos van Eijndhoven, The Netherlands
+
+    The Relaixed firmware is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    The Relaixed firmware is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this firmware.  If not, see <http://www.gnu.org/licenses/>.
+****************************************************************************************/
 /******************************************************************************
  * Module to receive and decode various types of IR commands
  *
- * Copyright 2011  Jos van Eijndhoven
  *****************************************************************************/
 
 #include "typedefs.h"
@@ -430,6 +447,9 @@ static void rc56_handle_code(void)
 	  case 0x04:
 	  case 0x05:
 	  case 0x06:
+	  case 0x07:
+	  case 0x08:
+	  case 0x09:
 		channel_set(keycode);
 		break;
 	  case 0x0c: // power/standby
@@ -466,6 +486,9 @@ static void sirc_handle_code(void)
 	  case 0x03:
 	  case 0x04:
 	  case 0x05:
+	  case 0x06:
+	  case 0x07:
+	  case 0x08:
 		channel_set(keycode+1);
 		break;
 	  case 0x13: // vol down

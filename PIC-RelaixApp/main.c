@@ -1,3 +1,30 @@
+/****************************************************************************************
+	This file is part of the Relaixed firmware.
+    The Relaixed firmware is intended to control a DIY audio premaplifier.
+    Copyright 2011 Jos van Eijndhoven, The Netherlands
+
+    The Relaixed firmware is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    The Relaixed firmware is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this firmware.  If not, see <http://www.gnu.org/licenses/>.
+****************************************************************************************/
+
+/****************************************************************************************
+	This source code can be compiled with the free Microchip MPLAB C18 'LITE' C-compiler.
+	The set of source files can be handled as project with the free Microchip MPLAB IDE.
+
+	This file contains the 'main' top function, the interrupt-service-routines, and
+    the code to set the start-up state of the targeted PIC18F25J50 microcontroller.
+****************************************************************************************/
+
 #pragma config WDTEN = OFF          //WDT disabled (enabled by SWDTEN bit)
 #pragma config PLLDIV = 3           //Divide by 3 (12 MHz oscillator input)
 #pragma config STVREN = ON          //stack overflow/underflow reset enabled
@@ -34,6 +61,7 @@
 #include "amp_state.h"
 #include "relays.h"
 #include "ir_receiver.h"
+#include "dac_cntl.h"
 
 // Forward declarations
 void app_isr_high(void);
@@ -98,6 +126,7 @@ void boot_isr_low(void)
 
 static BOOL prev_usb_bus_sense;
 static unsigned int volume_tick, usb_tick, chan_tick, power_tick, flash_tick, ir_tick;
+static unsigned char dac_lock_tick;
 static char ir_received_ok;
 
 void main(void)
@@ -114,8 +143,9 @@ void main(void)
 	chan_tick = 0;
 	usb_tick = 0;
     ir_tick = 0;
-	display_set( 0x00, 0x00);
+    dac_lock_tick = 0;
 	display_set_alt( 0x00, 0x00, 0x00);
+	display_set( 0x00, 0x00, 1);
 	ir_receiver_init();
 	storage_init();
 	err = relay_boards_init();
@@ -144,7 +174,7 @@ void main(void)
 	// Set a timer to later undo the mute and activate last volume setting.
 	// wait some time for stabilization before enabling all other interrupts
 	while (power_tick > 0)
-		; // gets decreased on timer interrupts
+		; // gets decreased on timer interrupts, 183Hz
 
 	// power==0 now, from amp_state_init().
 	// incr power now quickly to 1, and later to 2.
@@ -156,6 +186,10 @@ void main(void)
 	INTCON3bits.INT2IE = 1;
 	INTCON3bits.INT3IF = 0;
 	INTCON3bits.INT3IE = 1;
+
+    // Check if a DAC is present in this Relaixed, if so initialize.
+    // This check was delayed to allow DAC power-up, otherwise its i2c interface stays in reset
+	dac_init();
 
 	while (1)
 	{
@@ -181,6 +215,9 @@ void main(void)
 				// if we move power_state from 0 to 1, we surely want to go later to 2
 				power_tick = 500;
 			}
+
+			if (power_incr > 0)
+				dac_init();  // check (again) for presence of DAC: it needs time to get out of reset
 			power_update();
 		}
 
@@ -198,6 +235,12 @@ void main(void)
 		{
 			flash_tick = 0;
 			flash_volume_channel();
+		}
+
+		if (dac_status() >= DAC_NOLOCK && dac_lock_tick == 0)
+		{
+			dac_check_lock();
+			dac_lock_tick = 45; // check lock 4x per secnd
 		}
 
 		/* some I/O to check repeatedly, for absence of interrupt-on-change */
@@ -257,6 +300,9 @@ void app_isr_high(void)
 
 		if (flash_tick > 1)
 			flash_tick--;
+
+		if (dac_lock_tick)
+			dac_lock_tick--;
 
 		PIR3bits.TMR4IF = 0;
 	}

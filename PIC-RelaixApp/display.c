@@ -1,3 +1,21 @@
+/****************************************************************************************
+	This file is part of the Relaixed firmware.
+    The Relaixed firmware is intended to control a DIY audio premaplifier.
+    Copyright 2011 Jos van Eijndhoven, The Netherlands
+
+    The Relaixed firmware is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    The Relaixed firmware is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this firmware.  If not, see <http://www.gnu.org/licenses/>.
+****************************************************************************************/
 /*********************************************************************
  * Take care of 2-digit 7-segment display
  *
@@ -24,7 +42,9 @@ static rom near char segment_table[] = {
 	127 /* ' ' */,
 	12  /* 'U' */,
 	55  /* 'r' */,
-	39  /* 'c' */
+	39  /* 'c' */,
+	23  /* 'n' */,
+	7   /* 'o' */
 };
 
 // Display refresh, called from isr on TMR4 wraparound, at 183Hz rate
@@ -62,11 +82,13 @@ void display_isr(void)
 	PORTC &= 0xF8;
 }
 	
-void display_set(byte digit_hi, byte digit_lo)
+void display_set(byte digit_hi, byte digit_lo, char override)
 {
 	segment_data[0] = segment_table[digit_lo];
 	segment_data[1] = segment_table[digit_hi];
-	alt_display_cnt = 0;
+
+	if (override)
+		alt_display_cnt = 0;
 }	
 
 void display_set_alt( byte digit_hi, byte digit_lo, byte duration)
