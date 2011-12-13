@@ -1,3 +1,21 @@
+/****************************************************************************************
+	This file is part of the Relaixed firmware.
+    The Relaixed firmware is intended to control a DIY audio premaplifier.
+    Copyright 2011 Jos van Eijndhoven, The Netherlands
+
+    The Relaixed firmware is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    The Relaixed firmware is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this firmware.  If not, see <http://www.gnu.org/licenses/>.
+****************************************************************************************/
 /**********************************************************************
  * Provide a non-volatile storage mechanism,
  * A] to save state like volume and channel when power is switched-off

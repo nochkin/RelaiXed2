@@ -1,3 +1,21 @@
+/****************************************************************************************
+	This file is part of the Relaixed firmware.
+    The Relaixed firmware is intended to control a DIY audio premaplifier.
+    Copyright 2011 Jos van Eijndhoven, The Netherlands
+
+    The Relaixed firmware is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    The Relaixed firmware is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this firmware.  If not, see <http://www.gnu.org/licenses/>.
+****************************************************************************************/
 /*
  * Code to keep track of amplifier state variables
  */
@@ -10,6 +28,7 @@
 #include "display.h"
 #include "relays.h"
 #include "storage.h"
+#include "dac_cntl.h"
  
 volatile char volume_incr; // modified from isr
 static char volume_incr_carry;
@@ -20,6 +39,8 @@ volatile char balance_incr;
 static char balance_incr_carry;
 
 static char power, muted;
+static byte n_channels, analog_channel;
+
 
 static union store_volume
 {
@@ -75,7 +96,31 @@ static void set_volume_balance_relays(void)
 	if (volume_right <  0) volume_right = 0;
 	if (volume_left  <  0) volume_left  = 0;
 
-	set_relays(0x00, power, channel, volume_left, volume_right);
+
+	set_relays(0x00, power, analog_channel, volume_left, volume_right);
+}
+
+void volume_display(char override)
+{
+	byte vol_div_10, vol_by_10, vol_mod_10;
+
+	if (muted)
+	{
+		display_set( 0x00, 0x00, override);
+		return;
+	}
+	else if (dac_status() == DAC_NOLOCK)
+	{
+		display_set( DIGIT_n, DIGIT_o, override);
+		return;
+	}
+
+	vol_div_10 = 0;
+	for (vol_by_10 = 10; vol_by_10 <= master_volume; vol_by_10 += 10)
+		vol_div_10++;
+	vol_mod_10 = master_volume - vol_by_10 + 10;
+
+	display_set( vol_div_10, vol_mod_10, override);
 }
 
 void volume_update(void)
@@ -129,14 +174,7 @@ void volume_update(void)
 		master_volume = 0; // weird, flash_load error?
 
 	set_volume_balance_relays();
-	
-	vol_div_10 = 0;
-	for (vol_by_10 = 10; vol_by_10 <= master_volume; vol_by_10 += 10)
-		vol_div_10++;
-	vol_mod_10 = master_volume - vol_by_10 + 10;
-
-	display_set( vol_div_10, vol_mod_10);
-
+	volume_display( 1);
 	usb_write( vol_msg, (byte)3); // three-char message
 }
 
@@ -183,7 +221,7 @@ void mute(void)
 
 	muted = 1;
 	set_relays(0x00, power, 0x00, 0x00, 0x00);
-	display_set( 0x00, 0x00);	
+	display_set( 0x00, 0x00, 1);	
 }
 
 void unmute(void)
@@ -199,6 +237,7 @@ void channel_update(void)
 {
 	char chan_msg[] = {'C', '+', '0'};
 	char chan_incr_abs;
+    byte dac_channel;
 
 	if (power < 2)
 		return;
@@ -216,13 +255,30 @@ void channel_update(void)
 	channel += channel_incr;
 	channel_incr = 0;
 
-	while (channel > 6)
-		channel -= 6;
+    n_channels = 6; // default relaixed
+	if (dac_status() != DAC_ABSENT)
+		n_channels = 9; // 4 digital inputs into one analog input
+
+	while (channel > n_channels)
+		channel -= n_channels;
 	if (channel == 0)
-		channel = 6;
+		channel = n_channels;
 
+    // if we have a dac, it is a 4-input dac connected to analog input channel 4
+    // the dac digital inputs are numbered 1-4 in the user interface
+    if (dac_status() != DAC_ABSENT)
+	{
+		analog_channel = (channel <= 4) ? 4 :
+						 (channel <= 7) ? channel - 4 :
+						  channel - 3;
+		dac_channel = (channel <= 4) ? channel - 1 : 4;
+		dac_set_channel( dac_channel);
+	} else
+		analog_channel = channel;
+
+	
 	set_volume_balance_relays();
-
+	volume_display(0);
 	display_set_alt( DIGIT_C, channel, 2); // repeat channel-display twice
 
 	usb_write( chan_msg, (byte)3); // three-char message
@@ -247,7 +303,7 @@ void power_update(void)
 	{
 		// first do audio mute...
 		set_relays(0x00, power, 0x00, 0x00, 0x00);
-		display_set( DIGIT_dark, DIGIT_dark);
+		display_set( DIGIT_dark, DIGIT_dark, 1);
 		// and follow immediatly with analog power shutdown
 
         // set volume-state down AFTER power-state down,
@@ -259,7 +315,7 @@ void power_update(void)
 	} else if (power_incr > 0 && power == 0)
 	{
 		power = 1;
-		display_set( 0x00, 0x00);
+		display_set( 0x00, 0x00, 1);
 		set_relays(0x00, power, 0x00, 0x00, 0x00);
 		// Enable analog power, stay in mute
 		// Later, from the 'power_tick' counter, power will be incremented to 2

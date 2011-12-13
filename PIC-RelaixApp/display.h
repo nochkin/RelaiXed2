@@ -19,9 +19,11 @@ extern volatile byte display_cnt; // increments on every display refresh (is at 
 #define DIGIT_U     19
 #define DIGIT_r     20
 #define DIGIT_c     21
+#define DIGIT_n		22
+#define DIGIT_o		23
 
 extern void display_isr(void);
-extern void display_set(byte digit_hi, byte digit_lo);
+extern void display_set(byte digit_hi, byte digit_lo, char override);
 extern void display_set_alt( byte digit_hi, byte digit_lo,
 							byte duration);
 
