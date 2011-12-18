@@ -261,7 +261,7 @@ void ir_receiver_isr(void)
 {
 	static byte first_low;
 
-	byte delay = tmr_delay();
+	byte delay = tmr_delay(); // increments nedges
 
 	switch (nedges)
 	{
@@ -386,7 +386,7 @@ static void rc56_handle_code(void)
 		keycode = ((byte)final_ircode) & 0x003f;
 		if (final_ircode & 0x1000) // 13'th bit used for RC5X
 			keycode |= 0x40; // add as 7th command bit
-		device = (byte)(final_ircode >> 6) && 0x3f;
+		device = (byte)(final_ircode >> 6) & 0x1f; // clear toggle-bit, keep 5 device bits
 	}
 
 	// The IR command is decoded for further processing in either one of the following cases:
