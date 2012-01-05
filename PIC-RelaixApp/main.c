@@ -29,7 +29,7 @@
 #pragma config PLLDIV = 3           //Divide by 3 (12 MHz oscillator input)
 #pragma config STVREN = ON          //stack overflow/underflow reset enabled
 #pragma config XINST = OFF          //Extended instruction set disabled
-#pragma config CPUDIV = OSC1        //No CPU system clock divide
+#pragma config CPUDIV = OSC1        //No CPU system clock divide: Fosc=48MHz
 #pragma config CP0 = OFF            //Program memory is not code-protected
 #pragma config OSC = HSPLL          //HS oscillator, PLL enabled, HSPLL used by USB
 #pragma config T1DIG = OFF          //Sec Osc clock source may not be selected, unless T1OSCEN = 1
@@ -127,7 +127,9 @@ void boot_isr_low(void)
 static BOOL prev_usb_bus_sense;
 static unsigned int volume_tick, usb_tick, chan_tick, power_tick, flash_tick, ir_tick;
 static unsigned char dac_lock_tick;
-static char ir_received_ok;
+static char ir_received_ok, ir_speedup;
+
+static char vol_usb_msg[] = { 'V', '0', '0', '0', '0'};
 
 void main(void)
 {
@@ -143,6 +145,7 @@ void main(void)
 	chan_tick = 0;
 	usb_tick = 0;
     ir_tick = 0;
+	ir_speedup = 20;
     dac_lock_tick = 0;
 	display_set_alt( 0x00, 0x00, 0x00);
 	display_set( 0x00, 0x00, 1);
@@ -225,10 +228,26 @@ void main(void)
 		{
 			ir_received_ok = 0;
 			ir_handle_code();
+			if (volume_incr)
+			{
+				vol_usb_msg[0] = 'V';
+				// when 'volume' keeps pressed, the volume-tick-speed goes up
+				if(ir_speedup <= 49)
+					ir_speedup += 4;
+			} else
+			{
+				vol_usb_msg[0] = 'v';
+				ir_speedup = 20;
+			}
+			byte2hex(vol_usb_msg+1, ir_tick);
+			byte2hex(vol_usb_msg+3, ir_speedup);
+
 			if (power_incr)
-				ir_tick = 100;
+				ir_tick = 100; // increase the default 20 to 100 on power on/off
 			else
 				flash_tick = 400;
+
+			usb_write(vol_usb_msg, 5);
 		}
 
 		if (flash_tick == 1)
@@ -309,7 +328,11 @@ void app_isr_high(void)
 
 	if (INTCON3bits.INT1IE && INTCON3bits.INT1IF)
 	{   // edge on IR-receiver input
-		if (ir_tick == 0)
+		// ir_tick, set high, needs to count down to ir_speedup, to accept a next volume command
+		// From ir_speedup to 0 it counts down further, allowing as 'continuation' an increase in 'ir_speedup'.
+		// The baseline value of '20' for ir-speedup covers the interval of about 100msec pause
+		// between successive ir_commands in RC5 when the button maintains pressed
+		if (((char)ir_tick) - ir_speedup <= 0)
 		{	// the tick counter is to prevent a too high rate of processing volume/channel updates
 			ir_receiver_isr();
 		}
@@ -319,11 +342,15 @@ void app_isr_high(void)
 	}
 
 	if (INTCONbits.TMR0IE && INTCONbits.TMR0IF)
-	{	// IR receiver timer expires: end of IR pulse-train
+	{	// IR receiver timer expires: about 5 ms after end of IR pulse-train
 		// Might also be a an unexpected termination on a bad signal reception
 		ir_received_ok = ir_tmr_isr();
+		if (ir_tick == 0)
+			ir_speedup = 20; // reset accelleration
+
 		if (ir_received_ok)
-			ir_tick = 20;
+			ir_tick = 65; // wait-time to process a next IR signal train; avoid unwanted/fast command repeats
+
 		INTCONbits.TMR0IE = 0; // do this interrupt only once after IR pulse train.
 		INTCON2bits.INTEDG1 = 0; // a new pulse-train should start with a neg-edge.
 	}
@@ -451,8 +478,9 @@ static void init(void)
 	PORTB = 0; TRISB = 0xFF; // B all inputs
 	INTCON2bits.RBPU = 0; // use weak pull-up for RB67
 	
-	// PORTC: all input except 7
-	PORTC = 0x80; TRISC = 0x7F;
+	// PORTC: all input
+	// note: portc.7 toggles run-time from input to output for 'opendrain' behavior
+	PORTC = 0x00; TRISC = 0xFF;
 	
 	// setup the remappable peripheral inputs:
 	// Clear IOLOCK

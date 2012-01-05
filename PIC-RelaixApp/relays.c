@@ -19,6 +19,12 @@
 /*********************************************************************
  * Send state-updates to relay board(s) through an I2C connection
  * Also detect connected relay boards.
+ * 
+ * On an unreliable I2C connection, protocol errors could arise.
+ * It seems that this (Microchip) implementation of SW-drivers of its
+ * HW I2C module can achieve various kinds of deadlock on such errors.
+ * An I2C protocol deadlock can hang-up the entire PIC.
+ * The low-level I2C driver code should better be rewritten to resolve this!
  ********************************************************************/
 #include <i2c.h>
 #include <stdio.h>
@@ -106,6 +112,7 @@ void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
 		MSB(i2c_data) |= 0x80;
 
 	/////////////////// Perform I2C transmission /////////////////////
+	// Need bus-reset of device-reset here, to recover from lockup on erroneous bus transfers??
 	chip_addr = 0x40 | (board_id << 1);
 
 	i2c_tmp._word = i2c_data._word & i2c_prev._word;

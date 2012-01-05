@@ -284,8 +284,12 @@ void channel_update(void)
 	usb_write( chan_msg, (byte)3); // three-char message
 }
 
+// channel_set with absolute channel number as argument, called from ir_receiver only
 void channel_set( unsigned char new_ch)
 {
+	if (dac_status() == DAC_ABSENT && new_ch > 6)
+		return; // silently ignore unsupported button
+
 	channel_incr = new_ch - channel;
 	channel_update();
 }

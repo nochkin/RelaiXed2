@@ -66,11 +66,12 @@ void display_isr(void)
 			alt_display_cnt--;
 	}
 
-	/* first switch LEDs off (TRIS to '1') */
+	/* first switch LEDs off (TRIS to '1' makes input) */
 	TRISB |= 0x0F;
 	TRISC |= 0x07;
 	
 	/* switch LED select */
+	// note: is open-drain output: actually switch TRISC value
 	LEDright = !(display_cnt & 0x01); // set IO port segment select
 
 	segment = segment_data[inx];
@@ -79,7 +80,7 @@ void display_isr(void)
 	TRISB &= segment | 0xF0;
 	TRISC &= (segment >> 4) | 0xF8;
 	PORTB &= 0xF0;
-	PORTC &= 0xF8;
+	PORTC &= 0x78;
 }
 	
 void display_set(byte digit_hi, byte digit_lo, char override)

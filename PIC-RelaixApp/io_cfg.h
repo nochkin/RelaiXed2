@@ -63,7 +63,8 @@
 #define SelectB  PORTAbits.RA5
 
 #define HasUSB   PORTCbits.RC6
-#define LEDright PORTCbits.RC7
+//#define LEDright PORTCbits.RC7
+#define LEDright TRISCbits.TRISC7
 
 // RA6&7 are in use by the xtal oscillator
 // RC4&5 are reserved for the USB port
