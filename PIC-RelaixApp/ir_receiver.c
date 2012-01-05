@@ -33,7 +33,7 @@
 /***************************
  * This code is designed to decode three different IR control protocols:
  * The old/original Philips RC5, RC5X, the newer RC6, and the old Sony SIRC protocol
- * For a good overview of these, See http://www.sbprojects.com/knowledge/ir/ir.htm
+ * For a good overview of these, See http://www.sbprojects.com/knowledge/ir/index.php
  *
  * Timer0 is used for measuring delay between successive edges on the IR input.
  * The decoding is based on receiving an interrupt on each edge, and saving a
@@ -450,7 +450,7 @@ static void rc56_handle_code(void)
 	  case 0x07:
 	  case 0x08:
 	  case 0x09:
-		channel_set(keycode);
+		channel_set(keycode); // call with new (absolute) channel number
 		break;
 	  case 0x0c: // power/standby
 		if (power_state() == 0)
