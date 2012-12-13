@@ -107,11 +107,13 @@ void volume_display(char override)
 	if (muted)
 	{
 		display_set( 0x00, 0x00, override);
+		lcd_display_mute();
 		return;
 	}
 	else if (dac_status() == DAC_NOLOCK)
 	{
 		display_set( DIGIT_n, DIGIT_o, override);
+		lcd_display_nolock();
 		return;
 	}
 
@@ -121,6 +123,7 @@ void volume_display(char override)
 	vol_mod_10 = master_volume - vol_by_10 + 10;
 
 	display_set( vol_div_10, vol_mod_10, override);
+	lcd_display_volume(vol_div_10, vol_mod_10);
 }
 
 void volume_update(void)
@@ -221,7 +224,8 @@ void mute(void)
 
 	muted = 1;
 	set_relays(0x00, power, 0x00, 0x00, 0x00);
-	display_set( 0x00, 0x00, 1);	
+	display_set( 0x00, 0x00, 1);
+	lcd_display_mute();
 }
 
 void unmute(void)

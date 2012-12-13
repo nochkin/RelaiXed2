@@ -40,6 +40,23 @@
 #define mLED_6              TRISBbits.TRISB1
 #define mLED_7              TRISBbits.TRISB3
 
+#define mLED_a				mLED_1
+#define mLED_b				mLED_2
+#define mLED_c				mLED_3
+#define mLED_d				mLED_4
+#define mLED_e				mLED_5
+#define mLED_f				mLED_6
+#define mLED_g				mLED_7
+
+// 6 output control lines to LCD coincide with first 6 LED segment bits
+#define LCD_Vdd				PORTBbits.RB2
+#define LCD_CSb				PORTBbits.RB0
+#define LCD_A0				PORTCbits.RC1
+#define LCD_SCL				PORTCbits.RC0
+#define LCD_SI				PORTCbits.RC2
+#define LCD_RSTb			PORTBbits.RB1
+#define LCD_Sense			PORTBbits.RB3
+
 #define mLED_1_On()         {mLED_1 = 0; PORTBbits.RB2 = 0;}
 #define mLED_2_On()         {mLED_2 = 0; PORTBbits.RB0 = 0;}
 #define mLED_3_On()         {mLED_3 = 0; PORTCbits.RC1 = 0;}

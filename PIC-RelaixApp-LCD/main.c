@@ -56,6 +56,7 @@
 #include "typedefs.h"                   
 #include "io_cfg.h"
 #include "display.h"
+#include "lcd_display.h"
 #include "usb_io.h"
 #include "storage.h"
 #include "amp_state.h"
@@ -149,6 +150,8 @@ void main(void)
     dac_lock_tick = 0;
 	display_set_alt( 0x00, 0x00, 0x00);
 	display_set( 0x00, 0x00, 1);
+	lcd_display_init();
+	lcd_display_mute();
 	ir_receiver_init();
 	storage_init();
 	err = relay_boards_init();
@@ -291,7 +294,8 @@ void app_isr_high(void)
 	// Used for display multiplexing, but also for various local time counters
 	if (PIE3bits.TMR4IE && PIR3bits.TMR4IF)
 	{
-		display_isr();
+		if (!has_lcd_display)
+			display_isr();
 
 		if (volume_tick)
 			volume_tick--;
