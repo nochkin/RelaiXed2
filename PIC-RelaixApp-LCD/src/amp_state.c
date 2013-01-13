@@ -204,6 +204,24 @@ void volume_update(void)
 	usb_write( vol_msg, (byte)3); // three-char message
 }
 
+void balance_display(void)
+{
+	if (!has_lcd_display)
+	{
+		if (master_balance >= 0)
+		{
+			display_set_alt( DIGIT_dark, master_balance, 2);
+		} else
+		{
+			display_set_alt( DIGIT_minus, -master_balance, 2);
+		}
+	}
+	else {
+		lcd_display_balance(master_balance);
+	}
+
+}
+
 void balance_update(void)
 {
 	if (power < 2 || muted)
@@ -231,20 +249,7 @@ void balance_update(void)
 
 	set_volume_balance_relays();
 
-	if (!has_lcd_display)
-	{
-		if (master_balance >= 0)
-		{
-			display_set_alt( DIGIT_dark, master_balance, 2);
-		} else
-		{
-			display_set_alt( DIGIT_minus, -master_balance, 2);
-		}
-	}
-	else {
-		lcd_display_balance(master_balance);
-
-	}
+	balance_display();
 }
 
 void mute(void)
@@ -319,6 +324,7 @@ void channel_update(void)
 	
 	set_volume_balance_relays();
 	volume_display(0);
+	balance_display();
 
 	if (!has_lcd_display)
 		display_set_alt( DIGIT_C, channel, 2); // repeat channel-display twice

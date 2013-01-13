@@ -2,7 +2,7 @@
 MagicCookie={0b13fe8c-dfe0-40eb-8900-6712719559a7}
 Version=1.0
 [File000]
-Location=E:\NZ\Baseline\obj\amp_state.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\amp_state.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -15,7 +15,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File001]
-Location=E:\NZ\Baseline\obj\dac_cntl.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\dac_cntl.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -28,7 +28,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File002]
-Location=E:\NZ\Baseline\obj\debug.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\debug.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -41,7 +41,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File003]
-Location=E:\NZ\Baseline\obj\display.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\display.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -54,7 +54,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File004]
-Location=E:\NZ\Baseline\obj\ir_receiver.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\ir_receiver.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -67,7 +67,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File005]
-Location=E:\NZ\Baseline\obj\lcd.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\lcd.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -80,7 +80,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File006]
-Location=E:\NZ\Baseline\obj\main.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\main.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -93,7 +93,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File007]
-Location=E:\NZ\Baseline\obj\relays.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\relays.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -106,7 +106,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File008]
-Location=E:\NZ\Baseline\obj\storage.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\storage.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -119,7 +119,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File009]
-Location=E:\NZ\Baseline\obj\usb_io.o
+Location=E:\code\PIC-RelaixApp-LCD\obj\usb_io.o
 Folder=Intermediary
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -132,7 +132,7 @@ ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
 DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
 [File010]
-Location=E:\NZ\Baseline\bin\relaixed-app.cof
+Location=E:\code\PIC-RelaixApp-LCD\bin\relaixed-app.cof
 Folder=Output
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -145,7 +145,7 @@ ToolArgsString=/m"$(BINDIR_)$(TARGETBASE).map" /w /o"$(BINDIR_)$(TARGETBASE).cof
 TraceCmdString=
 DebugOptions=/z__MPLAB_DEBUG=1 /z__MPLAB_DEBUGGER_PICKIT2=1 /z__ICD2RAM=1
 [File011]
-Location=E:\NZ\Baseline\bin\relaixed-app.hex
+Location=E:\code\PIC-RelaixApp-LCD\bin\relaixed-app.hex
 Folder=Output
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}
@@ -158,7 +158,7 @@ ToolArgsString=/m"$(BINDIR_)$(TARGETBASE).map" /w /o"$(BINDIR_)$(TARGETBASE).cof
 TraceCmdString=
 DebugOptions=/z__MPLAB_DEBUG=1 /z__MPLAB_DEBUGGER_PICKIT2=1 /z__ICD2RAM=1
 [File012]
-Location=E:\NZ\Baseline\bin\relaixed-app.map
+Location=E:\code\PIC-RelaixApp-LCD\bin\relaixed-app.map
 Folder=Output
 DeviceName=PIC18F25J50
 LanguageToolSuiteID={5B7D72DD-9861-47BD-9F60-2BE967BF8416}

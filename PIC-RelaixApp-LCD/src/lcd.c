@@ -24,6 +24,7 @@ void init_spi2(void);
 unsigned char WriteSPI2(unsigned char data_out);
 byte lcd_write_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size, far rom unsigned char* data, byte array_y_size);
 byte lcd_clear_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size);
+byte lcd_neg_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size);
 
 #define LCD_POWER_PIN		LATCbits.LATC7
 #define	LCD_POWER_DIR 		TRISCbits.TRISC7
@@ -269,18 +270,13 @@ void isr_lcd_refresh(void)
 
 
 byte lcd_clear_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size) {
-	
-	byte x;
-
+	byte x, retvalue = 0;
 	for (x=x_pos; x < (x_pos+x_size); x++) {
 	
-		lcd_write_gfx(x, y_pos, 1, y_size, _emptycol, 8);
+		retvalue |= lcd_write_gfx(x, y_pos, 1, y_size, _emptycol, 8);
 	}
-
-	
-
+	return retvalue;
 }
-
 
 byte lcd_write_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size, far rom unsigned char* data, byte array_y_size_in_byte)
 {
@@ -320,46 +316,46 @@ byte lcd_write_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size, far rom uns
 		for (i=0; i<8 && (i+page_start)<LCD_PAGE_MAX; i++)
 			tmp[i+page_start] = data[((int)data_col_idx*(int)array_y_size_in_byte) + i];
 			
-		
-		// shift "down"
-		page_offset_top = page_offset_top;
-		for (i=page_start; i<=page_end; i++) {
-			if (i==page_start) {
-				// tmp[i] 							   7654 3xxx
-				// i.e page_offset_top = 2 
-				carry = tmp[i] >> (8-page_offset_top);		// xxxx xx76
-				mask = (1<<(page_offset_top))-1;			// 0000 0011
-				carry &= mask;						// 0000 0076
-				tmp[i] <<= page_offset_top;					// 543x xxxx
-			}
-			else if (i==page_end) {
-				// tmp[i] 							   GHFE DCBA
-				tmp[i] <<= page_offset_top;					// FEDC BAxx
-				tmp[i] &= ~mask;					// FEDC BA00
-				// carry set below					   0000 00hg
-				// mask set above                      0000 0011
-				tmp[i] |= carry;					// FEDC BAhg
-				// data_offset_bottom = 3
-				mask = (1<<(page_offset_bottom==0?8:page_offset_bottom))-1;	// 0000 0111
-				tmp[i] &= mask;						// 0000 0Ahg
-			}
-			else if ((i > page_start) && (i < page_end)) {
-				// mask set above                      0000 0011
-				tmp2 = carry;						// 0000 0076
-				// tmp[i] 							   hgfe dcba
-				carry = tmp[i] >> (8-page_offset_top);		// xxxx xxhg
-				carry &= mask;						// 0000 00hg
-				tmp[i] <<= page_offset_top;					// fedc baxx
-				tmp[i] &= ~mask;					// fedc ba00
-				tmp[i] |= tmp2;						// fedc ba76
-			}
-			
-			if (page_start == page_end) {
-				tmp[i] <<= page_offset_top;
+		// shift data
+
+		if (page_start == page_end) {
+				tmp[page_start] <<= page_offset_top;
 				mask = ~((1<<page_offset_top)-1);
-				mask2 = ~(1<<page_offset_bottom)-1;
-				mask = ~(mask ^ mask2); // X-NOR
-				tmp[i] &= mask;
+				mask2 = ~((1<<page_offset_bottom)-1);
+				mask = mask ^ mask2; // X-OR
+				tmp[page_start] &= mask;
+		}
+		else {
+			for (i=page_start; i<=page_end; i++) {
+				if (i==page_start) {
+					// tmp[i] 							   7654 3xxx
+					// i.e page_offset_top = 2 
+					carry = tmp[i] >> (8-page_offset_top);		// xxxx xx76
+					mask = (1<<(page_offset_top))-1;			// 0000 0011
+					carry &= mask;						// 0000 0076
+					tmp[i] <<= page_offset_top;					// 543x xxxx
+				}
+				else if (i==page_end) {
+					// tmp[i] 							   GHFE DCBA
+					tmp[i] <<= page_offset_top;					// FEDC BAxx
+					tmp[i] &= ~mask;					// FEDC BA00
+					// carry set below					   0000 00hg
+					// mask set above                      0000 0011
+					tmp[i] |= carry;					// FEDC BAhg
+					// data_offset_bottom = 3
+					mask = (1<<(page_offset_bottom==0?8:page_offset_bottom))-1;	// 0000 0111
+					tmp[i] &= mask;						// 0000 0Ahg
+				}
+				else if ((i > page_start) && (i < page_end)) {
+					// mask set above                      0000 0011
+					tmp2 = carry;						// 0000 0076
+					// tmp[i] 							   hgfe dcba
+					carry = tmp[i] >> (8-page_offset_top);		// xxxx xxhg
+					carry &= mask;						// 0000 00hg
+					tmp[i] <<= page_offset_top;					// fedc baxx
+					tmp[i] &= ~mask;					// fedc ba00
+					tmp[i] |= tmp2;						// fedc ba76
+				}
 			}
 		}
 	
@@ -387,12 +383,76 @@ byte lcd_write_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size, far rom uns
 			if (page_start == page_end) {
 				mask = (1<<page_offset_top)-1;
 				mask2 = (1<<page_offset_bottom)-1;
-				mask = (mask ^ mask2); // X-OR
+				mask = ~(mask ^ mask2); // X-NOR
 			}
 
 			LCD_shadow[page_cnt][col_cnt] &= mask;
 			tmp[page_cnt] &= ~mask;
 			LCD_shadow[page_cnt][col_cnt] |= tmp[page_cnt];
+		}
+	}
+	return error;
+}
+
+
+byte lcd_neg_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size) {
+	byte error = 0x00;
+	byte page_start, page_end;
+	byte page_offset_top, page_offset_bottom;
+	byte col_cnt, page_cnt;
+	int i;
+
+	byte data_col_idx;
+
+	unsigned char mask;
+	unsigned char mask2;
+	unsigned char tmp;
+
+	memory_tainted = 1;
+
+	if ((x_pos + x_size - 1)> LCD_COL_MAX)
+		error |= 0x01; 
+	if ((y_pos + y_size) > LCD_ROW_MAX)
+		error |= 0x02;
+
+	// shadow ram indexes (target)
+	page_start = y_pos>>3;					// page start index
+	page_end = MIN((y_pos + y_size -1)>>3,7);		// page end index
+	page_offset_top = y_pos & 0x07;				// shift inside page/byte for shadow
+	page_offset_bottom = (y_pos + y_size) & 0x07;				// shift inside page/byte for shadow
+	
+	
+	for (col_cnt=x_pos; col_cnt<(x_pos+x_size); col_cnt++)
+	{
+		for (page_cnt=/*0*/page_start; page_cnt<=page_end/*7*/; page_cnt++)
+		{
+			/*if (page_cnt < page_start) {
+				continue;
+			}
+			else */
+			if (page_cnt == page_start) {
+				mask = (1<<page_offset_top)-1;
+			}
+			else if ((page_cnt > page_start) && (page_cnt < page_end)) {
+				mask = 0x00;
+			}
+			else if (page_cnt == page_end) {
+				mask = ~((1<<(page_offset_bottom==0?8:page_offset_bottom))-1);
+			}
+			/*
+			else // page_cnt > page_end
+				continue;
+			*/
+			
+			if (page_start == page_end) {
+				mask = (1<<page_offset_top)-1;
+				mask2 = (1<<page_offset_bottom)-1;
+				mask = (mask ^ mask2); // X-OR
+			}
+			tmp =~ LCD_shadow[page_cnt][col_cnt];
+			LCD_shadow[page_cnt][col_cnt] &= mask;
+			tmp &= ~mask;
+			LCD_shadow[page_cnt][col_cnt] |= tmp;
 		}
 	}
 	return error;
@@ -474,33 +534,8 @@ void lcd_display_mute(byte muted)
 }
 
 
-
-
-
-void draw_lcd_bmp() {
-
-	// lock shadow memory for write
-	LOCK_SHADOW_MEMORY;
-
-	// draw balance scale
-	lcd_write_gfx(/*x_pos*/ LCD_BALANCE_POS_X, /*y_pos*/ LCD_BALANCE_POS_Y, /*x_size*/ LCD_BALANCE_SIZE_X, /*y_size*/ LCD_BALANCE_SIZE_Y, BalanceBmp, /*array_y_size_in_byte*/ 2 );
-
-	// draw balance logo
-	// tdb
-
-	// draw volume scale
-	// tbd
-
-	// draw channel logo
-	// tbd
-
-
-
-	// release shadow memory for write
-	RELEASE_SHADOW_MEMORY;
-}
-
 void lcd_display_balance(char master_balance) {
+
 
 	byte master_balance_abs;
 	if (master_balance>0)
@@ -511,12 +546,12 @@ void lcd_display_balance(char master_balance) {
 	// lock shadow memory for write
 	LOCK_SHADOW_MEMORY;
 
-	// re-draw balance scale
-	lcd_write_gfx(/*x_pos*/ LCD_BALANCE_POS_X, /*y_pos*/ LCD_BALANCE_POS_Y, /*x_size*/ LCD_BALANCE_SIZE_X, /*y_size*/ LCD_BALANCE_SIZE_Y, BalanceBmp, /*array_y_size_in_byte*/ 2 );
-	
-	// draw balance index
-	lcd_write_gfx(/*x_pos*/ LCD_BALANCE_CENTER_X + (master_balance*2), /*y_pos*/ LCD_BALANCE_POS_Y+8, /*x_size*/ 1, /*y_size*/ 3, BalanceIndex, /*array_y_size_in_byte*/1);
+	// draw balance scale
+	lcd_write_gfx(LCD_BALANCE_BMP_X_POS, LCD_BALANCE_BMP_Y_POS, LCD_BALANCE_BMP_X_SIZE, LCD_BALANCE_BMP_Y_SIZE, BalanceBmp, LCD_BALANCE_BMP_ARRAY_Y_SIZE_IN_BYTES);
 
+	// draw balance index
+	lcd_write_gfx(LCD_BALANCE_IDX_BMP_CENTER_X_POS + (master_balance<<1), LCD_BALANCE_IDX_BMP_CENTER_Y_POS, LCD_BALANCE_IDX_BMP_X_SIZE, LCD_BALANCE_IDX_BMP_Y_SIZE, BalanceIndex, LCD_BALANCE_IDX_BMP_ARRAY_Y_SIZE_IN_BYTES);
+#if 0	
 	// draw balance value
 	if (master_balance>0) // '+'
 		lcd_write_gfx(/*x_pos*/ LCD_BALANCE_POS_X, /*y_pos*/ LCD_BALANCE_POS_Y + LCD_BALANCE_SIZE_Y + 1, /*x_size*/ 5, /*y_size*/ 8, font5x8+((0x2B-0x20)*5*1),  /*array_y_size_in_byte*/1);
@@ -528,6 +563,7 @@ void lcd_display_balance(char master_balance) {
 	//write abs value
 	lcd_write_gfx(/*x_pos*/ LCD_BALANCE_POS_X + 5 + 1, /*y_pos*/ LCD_BALANCE_POS_Y + LCD_BALANCE_SIZE_Y + 1, /*x_size*/ 5, /*y_size*/ 8, font5x8+((master_balance_abs+0x30-0x20)*5*1), /*array_y_size_in_byte*/1);
 	
+#endif
 	// release shadow memory for write
 	RELEASE_SHADOW_MEMORY;
 }
@@ -550,6 +586,7 @@ void lcd_display_info(const rom char* msg) {
 }
 
 void lcd_display_channel(byte channel) {
+
 	// lock shadow memory for write
 	LOCK_SHADOW_MEMORY;
 
@@ -559,6 +596,12 @@ void lcd_display_channel(byte channel) {
 
 	// display channel id
 	lcd_write_gfx(LCD_CHANNEL_ID_X_POS, LCD_CHANNEL_ID_Y_POS, LCD_CHANNEL_ID_X_SIZE, LCD_CHANNEL_ID_Y_SIZE, channelDIGIT+((channel-1)*(int)LCD_CHANNEL_ID_X_SIZE*(int)LCD_FONT_CH_ID_ARRAY_Y_SIZE_IN_BYTES ), LCD_FONT_CH_ID_ARRAY_Y_SIZE_IN_BYTES );
+
+	// display ch vertical banner
+	lcd_write_gfx(LCD_CHANNEL_BMP_X_POS, LCD_CHANNEL_BMP_Y_POS, LCD_CHANNEL_BMP_X_SIZE, LCD_CHANNEL_BMP_Y_SIZE, CH_vert, LCD_BMP_CH_VERT_ARRAY_Y_SIZE_IN_BYTES);
+
+	// highlight selected channel
+	lcd_neg_gfx(LCD_CHANNEL_BMP_X_POS+7, 1 + ((channel-1)<<3), LCD_CHANNEL_BMP_X_SIZE-8, 7);
 
 	// release shadow memory for write
 	RELEASE_SHADOW_MEMORY;
