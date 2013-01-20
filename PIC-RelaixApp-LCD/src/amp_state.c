@@ -145,6 +145,8 @@ void volume_display(char override)
 		display_set( vol_div_10, vol_mod_10, override);
 	else
 		lcd_display_volume(vol_div_10, vol_mod_10);
+
+	power_lcd_backlight(LCD_BACKLIGHT_DIMMED, attenuation);
 }
 
 void volume_update(void)
@@ -361,7 +363,7 @@ void power_update(void)
 			display_set( DIGIT_dark, DIGIT_dark, 1);
 		else {
 			// power backlight and display OFF
-			power_lcd_backlight(LCD_BACKLIGHT_OFF);
+			power_lcd_backlight(LCD_BACKLIGHT_OFF, 0);
 			power_lcd_display(LCD_POWER_OFF);
 		}
 		// and follow immediatly with analog power shutdown
@@ -379,9 +381,12 @@ void power_update(void)
 		if (!has_lcd_display)
 			display_set( 0x00, 0x00, 1);
 		else {
+			//int i;
+			//for (i=0; i<10000; i++);
+			//config_lcd(); // config LCD display (but do not power it up yet)
 			// power backlight and display ON
 			power_lcd_display(LCD_POWER_ON);
-			power_lcd_backlight(LCD_BACKLIGHT_FULL);
+			power_lcd_backlight(LCD_BACKLIGHT_FULL, 0);
 			// clear lcd
 			clear_lcd();
 			// display splash

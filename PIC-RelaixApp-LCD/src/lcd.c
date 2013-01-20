@@ -8,6 +8,7 @@
 #include <spi.h>
 #include <stdio.h>
 #include <string.h>
+#include <p18cxxx.h>
 #include "typedefs.h"
 #include "lcd.h"
 #include "io_cfg.h"
@@ -26,29 +27,39 @@ byte lcd_write_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size, far rom uns
 byte lcd_clear_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size);
 byte lcd_neg_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size);
 
-#define LCD_POWER_PIN		LATCbits.LATC7
-#define	LCD_POWER_DIR 		TRISCbits.TRISC7
+#define LCD_POWER_PIN			LATCbits.LATC7
+#define	LCD_POWER_DIR 			TRISCbits.TRISC7
 
-#define LCD_A0_PIN(m)  		{TRISCbits.TRISC1 = (m)? 1: 0; PORTCbits.RC1 = (m)? 0:0;}
-#define LCD_A0_DIR			TRISCbits.TRISC1
+#define LCD_A0_PIN(m)  			{TRISCbits.TRISC1 = (m)? 1: 0; PORTCbits.RC1 = (m)? 0:0;}
+#define LCD_A0_DIR				TRISCbits.TRISC1
 
 #define LCD_RESET_PIN(m)  		{TRISBbits.TRISB3 = (m)? 1: 0; PORTBbits.RB3 = (m)? 1:0;}
-#define LCD_RESET_DIR		TRISBbits.TRISB3
+#define LCD_RESET_DIR			TRISBbits.TRISB3
 
 #define LCD_CS_PIN(m) 			{TRISCbits.TRISC2 = (m)? 1: 0; PORTCbits.RC2 = (m)? 1:0;}
-#define LCD_CS_DIR			TRISCbits.TRISC2
+#define LCD_CS_DIR				TRISCbits.TRISC2
 
-#define LCD_SENSE_PIN  		PORTCbits.RC0
+#define LCD_BACKLIGHT_PIN(m)  	{TRISBbits.TRISB2 = (m)? 1: 0; PORTBbits.RB2 = (m)? 1:0;}
+#define LCD_BACKLIGHT_DIR 		TRISBbits.TRISB2
 
-#define LCD_BACKLIGHT_PIN  	LATBbits.LATB2	//PORTBbits.RB2
-#define LCD_BACKLIGHT_DIR 	TRISBbits.TRISB2
+#define LCD_SPI2_DOUT_PIN(m)  	{TRISBbits.TRISB0 = (m)? 1: 0; PORTBbits.RB0 = (m)? 1:0;}
+#define LCD_SPI2_DOUT_DIR 		TRISBbits.TRISB0
 
+#define LCD_SPI2_CLK_PIN(m)  	{TRISBbits.TRISB1 = (m)? 1: 0; PORTBbits.RB1 = (m)? 1:0;}
+#define LCD_SPI2_CLK_DIR 		TRISBbits.TRISB1
+
+
+
+//input only 
+#define LCD_SENSE_PIN  			PORTCbits.RC0
 
 
 
 #pragma udata large_udata
 unsigned char ram LCD_shadow[LCD_PAGE_MAX][LCD_COL_MAX];
 #pragma udata
+
+
 
 /* exported globals */
 // flag to singanl where a lcd or a 7-seg display is connected
@@ -59,6 +70,7 @@ byte lcd_wr_ack;
 
 // flag to signal whether to shadow has been modified or not
 byte memory_tainted;
+
 
 /* Check for presence of LCD.
  * The LCD is connected into the left 7-segment socket
@@ -93,52 +105,83 @@ void power_lcd_display(byte power) {
 	lcd_write_command(LCD_POWER_CTRL(power));
 }
 
-void power_lcd_backlight(byte power) {
+void power_lcd_backlight(byte power, byte brightness) {
+#ifdef LCD_BACKLIGHT_DIMMER
+	byte duty;
+#endif
+
 	switch (power) {
 		case LCD_BACKLIGHT_OFF:
+#ifdef LCD_BACKLIGHT_DIMMER
+			// duty cyle = 0 %
+			CCPR1L = 0x00;
+			CCP1CON = 0x0C;
+#else
+			LCD_BACKLIGHT_PIN(0);
+#endif
 			break;
 
 		case LCD_BACKLIGHT_FULL:
 		default:
+#ifdef LCD_BACKLIGHT_DIMMER
+			// duty cyle = 100 %
+			CCPR1L = 0x04;
+			CCP1CON = 0x3C;
+#else
+			LCD_BACKLIGHT_PIN(1);
+#endif
 			break;
 
+#ifdef LCD_BACKLIGHT_DIMMER
 		case LCD_BACKLIGHT_DIMMED:
+			duty = brightness;
+			CCPR1L = duty>>2;
+			CCP1CON = ((duty&0x03)<<4) | 0x0C;
 			break;
+#endif
 	}
 }
 
 
 void config_lcd(void)
 {
-	mLED_1_On(); // turn into output
-	mLED_2_On(); // turn into output
-//	mLED_3_On(); // turn into output
-//	mLED_4_On(); // turn into output
-//	mLED_5_On(); // turn into output
-	mLED_6_On(); // turn into output
-//	mLED_7_On(); // turn into output
 
 	LCD_A0_DIR			= 1;
 	LCD_RESET_DIR		= 1;
 	LCD_CS_DIR			= 1;
 
 	// setup the remappable peripheral outputs:
+	LCD_SPI2_CLK_DIR = 1;
+	LCD_SPI2_CLK_PIN(0);
+	LCD_SPI2_DOUT_DIR = 1;
+	LCD_SPI2_DOUT_PIN(0);
+
 	// Clear IOLOCK
 	EECON2 = 0x55;
 	EECON2 = 0xAA;
 	PPSCONbits.IOLOCK = 0;
 	RPOR3 = 9; // seg(b) -> RB0 -> RP3 -> SDO2 (SPI2 Data Out)
 	RPOR4 = 10; // seg(f) -> RB1 -> RP4 -> SCK2 (SPI2 CLK)
+#ifdef LCD_BACKLIGHT_DIMMER
+	RPOR5 = 14;	// seg(a) -> RB2 -> RP5 -> ECCP1 Compare or PWM Output Channel A
+#endif
 	// Set IOLOCK
 	EECON2 = 0x55;
 	EECON2 = 0xAA;
 	PPSCONbits.IOLOCK = 1;
 
+#ifdef LCD_BACKLIGHT_DIMMER
+	//NZ: setup Timer2 for LCD backlight dimmer
+	PR2 = 0x04;		// 150kHz @ Fosc = 48MHz
+	T2CON = 0x07; 	// prescaler = 16, timer2 enableD
+	CCPR1L = 0x04;	// DutyCycle = 100%
+	CCP1CON = 0x3C;
+#endif
+	LCD_BACKLIGHT_DIR 	= 1; 
+	LCD_BACKLIGHT_PIN(0);
+
 	// init SPI2
 	init_spi2();
-
-	// control backlight LCD
-	LCD_BACKLIGHT_PIN = 1; //NZ: useless for the moment....
 	
 	// reset LCD
 	lcd_hw_reset();
@@ -271,8 +314,7 @@ void isr_lcd_refresh(void)
 
 byte lcd_clear_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size) {
 	byte x, retvalue = 0;
-	for (x=x_pos; x < (x_pos+x_size); x++) {
-	
+	for (x=x_pos; x < (x_pos+x_size); x++) {	
 		retvalue |= lcd_write_gfx(x, y_pos, 1, y_size, _emptycol, 8);
 	}
 	return retvalue;
@@ -317,7 +359,6 @@ byte lcd_write_gfx(byte x_pos, byte y_pos, byte x_size, byte y_size, far rom uns
 			tmp[i+page_start] = data[((int)data_col_idx*(int)array_y_size_in_byte) + i];
 			
 		// shift data
-
 		if (page_start == page_end) {
 				tmp[page_start] <<= page_offset_top;
 				mask = ~((1<<page_offset_top)-1);
