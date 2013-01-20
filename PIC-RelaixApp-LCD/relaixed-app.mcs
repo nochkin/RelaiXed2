@@ -13,7 +13,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File001]
 Location=E:\code\PIC-RelaixApp-LCD\obj\dac_cntl.o
 Folder=Intermediary
@@ -26,7 +26,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File002]
 Location=E:\code\PIC-RelaixApp-LCD\obj\debug.o
 Folder=Intermediary
@@ -39,7 +39,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File003]
 Location=E:\code\PIC-RelaixApp-LCD\obj\display.o
 Folder=Intermediary
@@ -52,7 +52,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File004]
 Location=E:\code\PIC-RelaixApp-LCD\obj\ir_receiver.o
 Folder=Intermediary
@@ -65,7 +65,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File005]
 Location=E:\code\PIC-RelaixApp-LCD\obj\lcd.o
 Folder=Intermediary
@@ -78,7 +78,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File006]
 Location=E:\code\PIC-RelaixApp-LCD\obj\main.o
 Folder=Intermediary
@@ -91,7 +91,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File007]
 Location=E:\code\PIC-RelaixApp-LCD\obj\relays.o
 Folder=Intermediary
@@ -104,7 +104,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File008]
 Location=E:\code\PIC-RelaixApp-LCD\obj\storage.o
 Folder=Intermediary
@@ -117,7 +117,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File009]
 Location=E:\code\PIC-RelaixApp-LCD\obj\usb_io.o
 Folder=Intermediary
@@ -130,7 +130,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=-Ou- -Ot- -Ob- -Op- -Or- -Od- -Opa-
 TraceCmdString=
-DebugOptions=-D__DEBUG -D__MPLAB_DEBUGGER_PICKIT2=1
+DebugOptions=
 [File010]
 Location=E:\code\PIC-RelaixApp-LCD\bin\relaixed-app.cof
 Folder=Output
@@ -143,7 +143,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=/m"$(BINDIR_)$(TARGETBASE).map" /w /o"$(BINDIR_)$(TARGETBASE).cof"
 TraceCmdString=
-DebugOptions=/z__MPLAB_DEBUG=1 /z__MPLAB_DEBUGGER_PICKIT2=1 /z__ICD2RAM=1
+DebugOptions=
 [File011]
 Location=E:\code\PIC-RelaixApp-LCD\bin\relaixed-app.hex
 Folder=Output
@@ -156,7 +156,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=/m"$(BINDIR_)$(TARGETBASE).map" /w /o"$(BINDIR_)$(TARGETBASE).cof"
 TraceCmdString=
-DebugOptions=/z__MPLAB_DEBUG=1 /z__MPLAB_DEBUGGER_PICKIT2=1 /z__ICD2RAM=1
+DebugOptions=
 [File012]
 Location=E:\code\PIC-RelaixApp-LCD\bin\relaixed-app.map
 Folder=Output
@@ -169,7 +169,7 @@ SOLK=<src>|src\amp_state.c|src\dac_cntl.c|src\debug.c|src\display.c|src\ir_recei
 SuiteArgsString=
 ToolArgsString=/m"$(BINDIR_)$(TARGETBASE).map" /w /o"$(BINDIR_)$(TARGETBASE).cof"
 TraceCmdString=
-DebugOptions=/z__MPLAB_DEBUG=1 /z__MPLAB_DEBUGGER_PICKIT2=1 /z__ICD2RAM=1
+DebugOptions=
 [TOOL_LOC_STAMPS]
 tool_loc{96C98149-AA1B-4CF9-B967-FAE79CAB663C}=C:\Program Files (x86)\Microchip\mplabc18\v3.44\bin\mplink.exe
 tool_loc{E56A1C86-9D32-4DF6-8C34-FE0388B1B644}=C:\Program Files (x86)\Microchip\mplabc18\v3.44\bin\mcc18.exe

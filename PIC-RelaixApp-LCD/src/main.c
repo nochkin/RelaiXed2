@@ -54,6 +54,7 @@
 #include <stdio.h>
 #include <i2c.h>
 #include "typedefs.h"                   
+#include "defines.h"
 #include "io_cfg.h"
 #include "display.h"
 #include "lcd.h"
@@ -65,6 +66,7 @@
 #include "dac_cntl.h"
 #include "costant_string.h"
 
+
 // Forward declarations
 void app_isr_high(void);
 void app_isr_low(void);
@@ -72,15 +74,26 @@ void main(void);
 void check_usb_power(char);
 static void init(void);
 
+//#define __DEBUG
+
+
 #ifdef __DEBUG
 #define NO_BOOTLOADER
 #endif
 
-
+//#ifdef __DEBUG
 // Normal operation. Built hex image should be inserted by bootloader
 #define _RESET 0x2000
 #define ISR_HI 0x2008
 #define ISR_LO 0x2018
+/*
+#else
+
+#define _RESET 0x0000
+#define ISR_HI 0x0008
+#define ISR_LO 0x0018
+#endif
+*/
 
 // JvE: pragmas for bootloader addressing made
 // according to MPASM&MPLINK manual, chapter 13.5
@@ -158,6 +171,10 @@ void main(void)
 		display_set( 0x00, 0x00, 1);
 	}
 	else {
+		//NZ: config move to 'power_update' because, at this stage, the elco for the 3.3V 
+		//on the LCD board are not charged it, so the LCD controller is not powered up correctly
+		int i;
+		for (i=0; i<10000; i++);
 		config_lcd(); // config LCD display (but do not power it up yet)
 	}
 
@@ -531,7 +548,7 @@ static void init(void)
 	// setup Timer4 for display refresh: 2^16 downscale from Fosc/4 is 183Hz
 	T4CON = 0xFF; // timer4 on, 16x prescale, 16x postscale
 	IPR3bits.TMR4IP = 1; // high priority interrupt
-	PIE3bits.TMR4IE = 1;
+	PIE3bits.TMR4IE = 1; 
 
 	// setup Timer0 for InfraRed protocol reception
 	INTCON2bits.TMR0IP = 1; // high priority interrupt

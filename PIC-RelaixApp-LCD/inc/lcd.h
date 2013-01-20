@@ -31,7 +31,7 @@ extern void detect_display(void);
 extern void config_lcd(void);
 extern void clear_lcd(void);
 extern void power_lcd_display(byte power);
-extern void power_lcd_backlight(byte power);
+extern void power_lcd_backlight(byte power, byte brightness);
 extern void isr_lcd_refresh(void);
 extern void lcd_display_volume(byte msdigit, byte lsdigit);
 extern void lcd_display_balance(char master_balance);
