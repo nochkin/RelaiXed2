@@ -49,9 +49,9 @@
 
 typedef enum
 {
-	IR_unknown = 0,
-	IR_rc5,
-	IR_rc6,
+    IR_unknown = 0,
+    IR_rc5,
+    IR_rc6,
     IR_sirc,
     IR_error
 } IRprotocol;
@@ -107,11 +107,12 @@ char ir_tmr_isr(void)
 	{
 		byte2hex( usb_tmr_msg+3, (byte)(ircode>>8));
 		byte2hex( usb_tmr_msg+5, (byte)(ircode&0x00ff));
+		usb_tmr_msg[2] = ':';
 	} else
 	{
 		byte2hex( usb_tmr_msg+3, (byte)protocol);
 		byte2hex( usb_tmr_msg+5, (byte)nbits);
-		usb_tmr_msg[3] = '?';
+		usb_tmr_msg[2] = '?';
 	}
 	usb_write( usb_tmr_msg, (byte)7);
 
@@ -262,12 +263,12 @@ void ir_receiver_isr(void)
 	static byte first_low;
 
 	byte delay = tmr_delay(); // increments nedges
+	INTCONbits.TMR0IF = 0;
+	INTCONbits.TMR0IE = 1; // Request interrupt after last edge: termination
 
 	switch (nedges)
 	{
 	  case 1: // just entered the first 'low', must still measure its duration
-		INTCONbits.TMR0IF = 0;
-		INTCONbits.TMR0IE = 1; // Enable interrupt after last edge: termination
 		break;
 	  case 2:
 		first_low = delay;
@@ -323,7 +324,10 @@ void ir_receiver_isr(void)
 
 		break;
 	  default:
-		// further bits: call the proper  '<proto>_receive()' function
+                if (nedges > 50)
+                    protocol = IR_error;
+
+            // further bits: call the proper  '<proto>_receive()' function
 		protocol_handler[protocol](delay);
 		break;
 	}
@@ -333,22 +337,27 @@ void ir_receiver_isr(void)
 
 void ir_receiver_init(void)
 {
-	ircode = 0;
-	nbits = 0;
-	nedges = 0;
+    char usb_msg_flash[] = {'F','l', 'd','-','p',0};
+    ircode = 0;
+    nbits = 0;
+    nedges = 0;
     nbits_ok = 0;
-	device_prog_state = 1; // allow state upgrade during power-up
-	protocol = IR_unknown;
+    device_prog_state = 1; // allow IR device restriction during power-up
+    protocol = IR_unknown;
 
-	// set-up array of function pointers, for quick decoding per protocol
-	protocol_handler[IR_unknown] = error_receive;
-	protocol_handler[IR_rc5] = rc5_receive;
-	protocol_handler[IR_rc6] = rc6_receive;
-	protocol_handler[IR_sirc] = sirc_receive;
-	protocol_handler[IR_error] = error_receive;
+    // set-up array of function pointers, for quick decoding per protocol
+    protocol_handler[IR_unknown] = error_receive;
+    protocol_handler[IR_rc5] = rc5_receive;
+    protocol_handler[IR_rc6] = rc6_receive;
+    protocol_handler[IR_sirc] = sirc_receive;
+    protocol_handler[IR_error] = error_receive;
 
-	// fetch initial setup from flash memory
-	flash_load(KeyIR, &StoreIR.key);
+    // fetch initial setup from flash memory
+    flash_load(KeyIR, &StoreIR.key);
+    if (flash_protocol >= IR_error) // got illegal value from flash (empty = 0xFF)
+        flash_protocol = IR_unknown; // reset to valid protocol value
+    usb_msg_flash[5] = '0' + flash_protocol;
+    usb_write( usb_msg_flash, (byte)6);
 }
 
 // We recognized a special key-sequence on power-up,
@@ -370,6 +379,7 @@ static void freeze_ir_device(void)
 	usb_write( usb_frz_msg, (byte)11);
 }
 
+char usb_msg_wrongdev[] = {'I','R','p',0,'d','e','v',0,0};
 // The codes of rc5 and rc6 are very similar, we share most if its decoding
 static void rc56_handle_code(void)
 {
@@ -397,7 +407,17 @@ static void rc56_handle_code(void)
 
 	if (flash_protocol > IR_unknown && device_prog_state == 0 && // some protocol can be re-assigned
 		(flash_protocol != final_protocol || flash_device != device))
-		return;
+        {
+            usb_msg_wrongdev[2] = 'p';
+            usb_msg_wrongdev[3] = '0' + final_protocol;
+            byte2hex( usb_msg_wrongdev+7, device);
+            usb_write( usb_msg_wrongdev, (byte)9);
+            usb_msg_wrongdev[2] = 'F';
+            usb_msg_wrongdev[3] = '0' + flash_protocol;
+            byte2hex( usb_msg_wrongdev+7, flash_device);
+            usb_write( usb_msg_wrongdev, (byte)9);
+            return;
+        }
 
 	switch (keycode)
 	{
@@ -460,6 +480,11 @@ static void rc56_handle_code(void)
 	  default:
 		break;
 	}
+
+    if (device_prog_state == 1  // '1' is still value from init().
+        || volume_incr == 0)    // got some other command
+        device_prog_state = 0;  // This IR reception was not appropriate
+                                    // to proceed the IR restriction sequence
 }
 
 static void sirc_handle_code(void)
@@ -475,8 +500,13 @@ static void sirc_handle_code(void)
 	device = (byte)(final_ircode >> 7);
 
 	if (flash_protocol > IR_unknown && device_prog_state == 0 && // some protocol was selected/stored before
-		(flash_protocol != final_protocol || flash_device != device))
-		return;
+		(flash_protocol != IR_sirc || flash_device != device))
+        {
+            usb_msg_wrongdev[3] = '0' + final_protocol;
+            byte2hex( usb_msg_wrongdev+7, device);
+            usb_write( usb_msg_wrongdev, (byte)9);
+            return;
+        }
 
 	switch(keycode)
 	{
@@ -545,28 +575,36 @@ static void sirc_handle_code(void)
 	  default:
 		break;
 	}
+
+        if (device_prog_state == 1  // '1' is still value from init().
+            || volume_incr == 0)    // got some other command
+            device_prog_state = 0;  // This IR reception was not appropriate
+                                    // to proceed the IR restriction sequence
 }
 
 // ir_handle is called from main loop, to process succesfully captured IR frames
 void ir_handle_code(void)
 {
-	switch(final_protocol)
-	{
-	  case IR_rc6:
-	  case IR_rc5:
-		rc56_handle_code();
-		break;
-	  case IR_sirc:
-		sirc_handle_code();
-		break;
-	  default:
-	    break;
-	}
+    if (final_protocol == IR_unknown || final_protocol == IR_error)
+        return; // I think this cannot occur here, just defensive programming
 
-	if (device_prog_state == 3 && power_state() != 0)
-	{
-		freeze_ir_device();
-		device_prog_state = 0; // reset to inactive
-	} else if (power_state() != 1)
-		device_prog_state = 0; // reset to inactive
+    switch(final_protocol)
+    {
+        case IR_rc6:
+        case IR_rc5:
+            rc56_handle_code();
+            break;
+        case IR_sirc:
+            sirc_handle_code();
+            break;
+        default:
+	    break;
+    }
+
+    if (device_prog_state == 3 && power_state() != 0)
+    {
+	freeze_ir_device();
+	device_prog_state = 0; // reset to inactive
+    } else if (power_state() != 1)
+	device_prog_state = 0; // time for 'restriction' has passed
 }

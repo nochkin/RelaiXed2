@@ -71,6 +71,8 @@ void check_usb_power(char);
 static void init(void);
 
 #ifdef __DEBUG
+// After recent edits, I guess it is OK to have NO_BOOTLOADER always defined,
+// that makes development/debugging easier...
 #define NO_BOOTLOADER
 #endif
 
@@ -80,7 +82,8 @@ static void init(void);
 #define ISR_HI 0x2008
 #define ISR_LO 0x2018
 
-// JvE: pragmas for bootloader addressing made
+// JvE: pragmas for bootloader addressing made:
+// the bootloader passes interrupt events to these locations.
 // according to MPASM&MPLINK manual, chapter 13.5
 // The 'reset' jumps into the real 'main', not a device init function.
 extern void _startup (void); // See c018i.c in your C18 compiler dir
@@ -109,6 +112,14 @@ void app_interrupt_at_low_vector(void)
 }
 
 #ifdef NO_BOOTLOADER
+// the 3 functions below are a dummy bootloader replacement
+// if a real bootloader is present, it overrides this code
+//#pragma code boot_reset = 0x0000
+//void boot_reset(void)
+//{
+//	_asm goto _startup _endasm
+//}
+
 #pragma code boot_isr_hi=0x0008
 void boot_isr_high(void)
 {
@@ -139,6 +150,7 @@ void main(void)
 	extern FILE *stdout = _H_USER;  // redirect stdout to USB
 	
 	init();
+	storage_init();
 	
 	display_cnt = 0;
     volume_tick = 0;
@@ -150,7 +162,6 @@ void main(void)
 	display_set_alt( 0x00, 0x00, 0x00);
 	display_set( 0x00, 0x00, 1);
 	ir_receiver_init();
-	storage_init();
 	err = relay_boards_init();
 	set_relays(0x00, 0x00, 0x00, 0x00, 0x00);
 	amp_state_init();
@@ -384,7 +395,7 @@ void app_isr_high(void)
 	}
 
 	if (INTCON3bits.INT3IE && INTCON3bits.INT3IF)
-	{   // activity on channel-select input
+	{   // activity on channel-select push-button
 		if (INTCON2bits.INTEDG3 && chan_tick < 252)
 		{
 			// rising edge on channel input (release of SelectB)
@@ -400,17 +411,19 @@ void app_isr_high(void)
 					channel_incr = 1;
 					flash_tick = 300;
 				}
-				else if (power_state() == 0)
-				{
-					power_incr = 1;
-				}
 			}
 			chan_tick = 3;
 			INTCON2bits.INTEDG3 = 0; // look for falling edge
 		} else if (!INTCON2bits.INTEDG3 && chan_tick == 0)
 		{
 			// falling edge on channel input (SelectB)
-			chan_tick = 255; // Count duration of push button
+                        if (power_state() == 0)
+			{
+                            // launch power-up sequence
+                            power_incr = 1;
+                            chan_tick = 3;
+			} else
+                            chan_tick = 255; // Count duration of push button
 			INTCON2bits.INTEDG3 = 1; // look for rising edge
 		}
 		INTCON3bits.INT3IF = 0;
@@ -461,10 +474,13 @@ static void init(void)
 	IPR3 = 0;
 
 #ifdef NO_BOOTLOADER
+	PIE2bits.USBIE = 0;
 	PIR2bits.USBIF = 0;
 #else
 	PIE2bits.USBIE = 1;  // allow USB interrupts
 #endif
+
+        OSCTUNE = 0x40; // enable the 96MHz PLL to create the 48MHz system clock
 
 	// PORTA: all inputs, no interrupt-on-change facility :-(...
 	PORTA = 0; TRISA = 0xFF; // A all inputs
