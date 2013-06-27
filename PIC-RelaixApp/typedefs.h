@@ -122,6 +122,7 @@ typedef union _DWORD
 
 typedef void(*pFunc)(void);
 
+#if 0
 typedef union _POINTER
 {
     struct
@@ -146,6 +147,7 @@ typedef union _POINTER
     //rom far byte* fbRom;                // Far = 3 bytes pointer
     //rom far word* fwRom;
 } POINTER;
+#endif
 
 typedef enum _BOOL { FALSE = 0, TRUE } BOOL;
 
