@@ -33,6 +33,7 @@
 #include "usb_io.h"
 #include "amp_state.h"
 #include "relays.h"
+#include "display.h"
 
 // Local version, adapted from the provided one in C18/pmc_common library
 static unsigned char writeI2C( unsigned char data_out )
@@ -85,6 +86,7 @@ void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
 	byte chip_addr;
 	WORD i2c_data, i2c_tmp;
 	char i2c_msg[9] = {'I','2','C',':','0','0',',','0','0'};
+        char i2c_vol[4] = {'I','2','C','-'};
     static WORD i2c_prev = 0;
 
 	board_id = 0; // for now....
@@ -116,15 +118,21 @@ void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
 	chip_addr = 0x40 | (board_id << 1);
 
 	i2c_tmp._word = i2c_data._word & i2c_prev._word;
-	if (i2c_tmp._word != i2c_data._word && i2c_tmp._word != i2c_prev._word)
+	if (i2c_tmp._word != i2c_data._word
+            && i2c_tmp._word != i2c_prev._word
+            && (MSB(i2c_data) & 0xf0) == (MSB(i2c_prev) & 0xf0))
 	{
+            byte start_cnt;
+                usb_write(i2c_vol, (byte)4);
+                // Channel stays same, Update volume in 2 steps:
 		// first issue an intermediate value, to prevent high-volume audio
 		// bursts in the output during the relay switch time
-		unsigned int count;
 
 		mcp23017_output(chip_addr, i2c_tmp);
-		for (count=0; count < 4000L; count++)
-				; // wait-loop for about 5 msec. Not beautiful, using a timer would be nicer
+
+                start_cnt = display_cnt;
+                while (display_cnt != start_cnt+4)
+			; // wait for about 20 msec.
 	}
 	mcp23017_output(chip_addr, i2c_data);
 	i2c_prev = i2c_data;
