@@ -233,55 +233,73 @@ void unmute(void)
 	volume_update();	
 }
 
-void channel_update(void)
-{
-	char chan_msg[] = {'C', '+', '0'};
-	char chan_incr_abs;
+void channel_update(void) {
+    char chan_msg[] = {'C', '+', '0', '=', '0'};
+    char chan_incr_abs;
     byte dac_channel;
+    byte old_channel;
+    byte start_time;
 
-	if (power < 2)
-		return;
+    if (power < 2)
+        return;
 
-	if (channel_incr >= 0)
-	{
-		chan_incr_abs = channel_incr;
-	} else
-	{
-		chan_incr_abs = -channel_incr;
-		chan_msg[1] = '-';
-	}
+    old_channel = analog_channel;
+    if (channel_incr >= 0) {
+        chan_incr_abs = channel_incr;
+    } else {
+        chan_incr_abs = -channel_incr;
+        chan_msg[1] = '-';
+    }
     chan_msg[2] = (chan_incr_abs <= 9) ? '0' + chan_incr_abs : '*';
 
-	channel += channel_incr;
-	channel_incr = 0;
+    channel += channel_incr;
+    channel_incr = 0;
 
     n_channels = 6; // default relaixed
-	if (dac_status() != DAC_ABSENT)
-		n_channels = 9; // 4 digital inputs into one analog input
+    if (dac_status() != DAC_ABSENT)
+        n_channels = 9; // 4 digital inputs into one analog input
 
-	while (channel > n_channels)
-		channel -= n_channels;
-	if (channel == 0)
-		channel = n_channels;
+    while (channel > n_channels)
+        channel -= n_channels;
+    if (channel == 0)
+        channel = n_channels;
 
     // if we have a dac, it is a 4-input dac connected to analog input channel 4
     // the dac digital inputs are numbered 1-4 in the user interface
-    if (dac_status() != DAC_ABSENT)
-	{
-		analog_channel = (channel <= 4) ? 4 :
-						 (channel <= 7) ? channel - 4 :
-						  channel - 3;
-		dac_channel = (channel <= 4) ? channel - 1 : 4;
-		dac_set_channel( dac_channel);
-	} else
-		analog_channel = channel;
+    if (dac_status() != DAC_ABSENT) {
+        analog_channel = (channel <= 4) ? 4 :
+                (channel <= 7) ? channel - 4 :
+                channel - 3;
+        dac_channel = (channel <= 4) ? channel - 1 : 4;
+        dac_set_channel(dac_channel);
+    } else
+        analog_channel = channel;
+    chan_msg[4] = '0' + analog_channel;
+    usb_write(chan_msg, (byte) 5);
 
-	
-	set_volume_balance_relays();
-	volume_display(0);
-	display_set_alt( DIGIT_C, channel, 2); // repeat channel-display twice
-
-	usb_write( chan_msg, (byte)3); // three-char message
+    if (old_channel != analog_channel) {
+        chan_msg[1] = 'm';
+        chan_msg[2] = 'u';
+        chan_msg[3] = 't';
+        chan_msg[4] = 'e';
+        usb_write(chan_msg, (byte) 5);
+        // first: do max attenuation om current input channel
+        set_relays(0x00, power, old_channel, 0x01, 0x01);
+        //sleep 15msec;
+        start_time = display_cnt;
+        while (display_cnt != start_time + 3)
+            ; // display_cnt increments at 183 Hz
+        // second: switch input channel while holding attenuation.
+        set_relays(0x00, power, analog_channel, 0x01, 0x01);
+        // Let new input DC levels settle...
+        //sleep 160msec;
+        while (display_cnt != start_time + 30)
+            ;
+    }
+    // Finally re-establish volume on new input channel
+    set_volume_balance_relays();
+    volume_display(0);
+    display_set_alt(DIGIT_C, channel, 2); // repeat channel-display twice
 }
 
 // channel_set with absolute channel number as argument, called from ir_receiver only
