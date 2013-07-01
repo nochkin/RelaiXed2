@@ -23,6 +23,16 @@ https://relaixed2.svn.sourceforge.net/svnroot/relaixed2
 Revision History of (1) RelaiXedApp:
 ====================================
 
+RelaixedApp-20130701, svn rev. 64:
+----------------------------------
+Resolved a terrible bug that I didn't notice myself earlier but was reported by a user:
+After a power-up from primary power, sometimes the IR reception entered a non-operational state.
+This was repaired, the IR reception now comes up reliably.
+Two other updates:
+ - Waking up the relaixed from standby mode by pressing its knob occurs now on the 'press'
+   (was on the 'release' which was definitely less intuitive.)
+ - When switching input channel, there is now an automatic mute for a fraction of a second.
+   This prevents a loud 'tick' which could otherwise occur when switching at high volume.
 
 RelaiXedApp-20120105, svn rev. 54:
 ----------------------------------
