@@ -1,5 +1,5 @@
 /****************************************************************************************
-	This file is part of the Relaixed firmware.
+        This file is part of the Relaixed firmware.
     The Relaixed firmware is intended to control a DIY audio premaplifier.
     Copyright 2011 Jos van Eijndhoven, The Netherlands
 
@@ -15,11 +15,11 @@
 
     You should have received a copy of the GNU General Public License
     along with this firmware.  If not, see <http://www.gnu.org/licenses/>.
-****************************************************************************************/
+ ****************************************************************************************/
 /*
  * Code to keep track of amplifier state variables
  */
- 
+
 #include "typedefs.h"
 #include <p18cxxx.h>
 #include "io_cfg.h"
@@ -29,7 +29,7 @@
 #include "relays.h"
 #include "storage.h"
 #include "dac_cntl.h"
- 
+
 volatile char volume_incr; // modified from isr
 static char volume_incr_carry;
 
@@ -41,196 +41,205 @@ static char balance_incr_carry;
 static char power, muted;
 static byte n_channels, analog_channel;
 
+static union store_volume {
 
-static union store_volume
-{
-	struct
-	{
-		StorageKey key;
-		byte	_volume;
-		char	_balance; // signed
-		byte	_channel;
-	};
-	unsigned int words[2];
+    struct {
+        StorageKey key;
+        byte _volume;
+        char _balance; // signed
+        byte _channel;
+    };
+    unsigned int words[2];
 } StoreVolume;
 
 #define master_volume	StoreVolume._volume
-#define channel			StoreVolume._channel
+#define channel		StoreVolume._channel
 #define master_balance	StoreVolume._balance
 
-// Input selection channels: numbered 0 .. 5
-#define NCHANNELS 6
-
-void amp_state_init(void)
-{
-	volume_incr = 0;
+void amp_state_init(void) {
+    volume_incr = 0;
     volume_incr_carry = 0;
-	balance_incr = 0;
+    balance_incr = 0;
     balance_incr_carry = 0;
-	power_incr = 0;
-	channel_incr = 0;
-	channel = 0;
-	power = 0;
-}	
-
-static void set_volume_balance_relays(void)
-{
-	char balance_left, balance_right;
-	char volume_left, volume_right;
-
-	if (master_volume == 0 || channel == 0 || power == 0 || muted != 0)
-	{
-		// Don't let balance-computations result in non-zero volume
-		set_relays(0x00, power, channel, 0x00, 0x00);
-		return;
-	}
-
-	// Hmm... Microchip's C compiler wrongly implements signed >>
-	balance_right = (master_balance >> 1) | (master_balance & 0x80);
-	balance_left  = balance_right - master_balance;
-	volume_right  = (char)master_volume + balance_right;
-	volume_left   = (char)master_volume + balance_left;
-
-	if (volume_right > 64) volume_right = 64;
-	if (volume_left  > 64) volume_left  = 64;
-	if (volume_right <  0) volume_right = 0;
-	if (volume_left  <  0) volume_left  = 0;
-
-
-	set_relays(0x00, power, analog_channel, volume_left, volume_right);
+    power_incr = 0;
+    channel_incr = 0;
+    channel = 0;
+    power = 0;
 }
 
-void volume_display(char override)
-{
-	byte vol_div_10, vol_by_10, vol_mod_10;
+static byte avoid_volume_tick(char *tmp_l, char *tmp_r, char vol_l, char vol_r) {
+    static char prev_l = 0;
+    static char prev_r = 0;
+    byte min_l, min_r, bad;
 
-	if (muted)
-	{
-		display_set( 0x00, 0x00, override);
-		return;
-	}
-	else if (dac_status() == DAC_NOLOCK)
-	{
-		display_set( DIGIT_n, DIGIT_o, override);
-		return;
-	}
+    min_l = prev_l & vol_l;
+    min_r = prev_r & vol_r;
 
-	vol_div_10 = 0;
-	for (vol_by_10 = 10; vol_by_10 <= master_volume; vol_by_10 += 10)
-		vol_div_10++;
-	vol_mod_10 = master_volume - vol_by_10 + 10;
+    bad = ((min_l != prev_l) && (min_l != vol_l)) ||
+            ((min_r != prev_r) && (min_r != vol_r));
 
-	display_set( vol_div_10, vol_mod_10, override);
+    prev_l = vol_l;
+    prev_r = vol_r;
+    *tmp_l = min_l;
+    *tmp_r = min_r;
+
+    return bad;
 }
 
-void volume_update(void)
-{
-	byte vol_div_10, vol_by_10, vol_mod_10;
-	char vol_msg[] = {'V', '+', '0'};
-	char vol_incr_abs;
+static void set_volume_balance_relays(void) {
+    char balance_left, balance_right;
+    char volume_left, volume_right;
+    char tmp_l, tmp_r;
 
-	if (power < 2)
-		return;
+    if (master_volume == 0 || channel == 0 || power == 0 || muted != 0) {
+        // Don't let balance-computations result in non-zero volume
+        set_relays(power, channel, 0x00, 0x00);
+        return;
+    }
 
-	if (muted)
-	{
-		muted = 0;
-		volume_incr = 0; // first unmute before changing volume setting
-	}
+    if (isRelaixedXLR) {
+        // Hmm... Microchip's C compiler wrongly implements signed >>
+        balance_right = (master_balance >> 1) | (master_balance & 0x80);
+        balance_left = balance_right - master_balance;
+        volume_right = (char) master_volume + balance_right;
+        volume_left = (char) master_volume + balance_left;
 
-	volume_incr_carry += volume_incr;
-	volume_incr = 0; // quick copy-and-reset: avoid intermediate interrupts
+        if (volume_right > 64) volume_right = 64;
+        if (volume_left > 64) volume_left = 64;
+        if (volume_right < 0) volume_right = 0;
+        if (volume_left < 0) volume_left = 0;
+    } else {
+         // the relaixedSE does not implement balance control
+        volume_right = (char) master_volume;
+        volume_left = (char) master_volume;
+    }
 
-	vol_incr_abs = volume_incr_carry;
-	if (volume_incr_carry < 0)
-	{
-		vol_incr_abs = -volume_incr_carry;
-		vol_msg[1] = '-';
-	}
+    if (avoid_volume_tick(&tmp_l, &tmp_r, volume_left, volume_right)) {
+        byte start_cnt;
+        set_relays(power, analog_channel, tmp_l, tmp_r);
+
+        start_cnt = display_cnt;
+        while (display_cnt != start_cnt + 4)
+            ; // wait for about 20 msec.
+    }
+    set_relays(power, analog_channel, volume_left, volume_right);
+}
+
+void volume_display(char override) {
+    byte vol_div_10, vol_by_10, vol_mod_10;
+
+    if (muted) {
+        display_set(0x00, 0x00, override);
+        return;
+    } else if (dac_status() == DAC_NOLOCK) {
+        display_set(DIGIT_n, DIGIT_o, override);
+        return;
+    }
+
+    vol_div_10 = 0;
+    for (vol_by_10 = 10; vol_by_10 <= master_volume; vol_by_10 += 10)
+        vol_div_10++;
+    vol_mod_10 = master_volume - vol_by_10 + 10;
+
+    display_set(vol_div_10, vol_mod_10, override);
+}
+
+void volume_update(void) {
+    byte vol_div_10, vol_by_10, vol_mod_10;
+    char vol_msg[] = {'V', '+', '0'};
+    char vol_incr_abs;
+
+    if (power < 2)
+        return;
+
+    if (muted) {
+        muted = 0;
+        volume_incr = 0; // first unmute before changing volume setting
+    }
+
+    volume_incr_carry += volume_incr;
+    volume_incr = 0; // quick copy-and-reset: avoid intermediate interrupts
+
+    vol_incr_abs = volume_incr_carry;
+    if (volume_incr_carry < 0) {
+        vol_incr_abs = -volume_incr_carry;
+        vol_msg[1] = '-';
+    }
     vol_msg[2] = (vol_incr_abs <= 9) ? '0' + vol_incr_abs : '*';
 
-	// Our volume rotary switch giver two pulses per notch,
-	// but we want to incr volume with 1 per notch.
+    // Our volume rotary switch giver two pulses per notch,
+    // but we want to incr volume with 1 per notch.
     // In stead of simply div by 2, we build-in a hysteresis,
     // giving more stable behavior in case of switch spikes.
     // So, repeated +1,-1 will not cause relay activity.
-	while (volume_incr_carry >= 2)
-	{
-		if (master_volume < 64)
-			master_volume++;
+    while (volume_incr_carry >= 2) {
+        if (master_volume < 64)
+            master_volume++;
 
-		volume_incr_carry -= 2;		
-	}
+        volume_incr_carry -= 2;
+    }
 
-	while (volume_incr_carry <= -2)
-	{
-		if (master_volume > 0)
-			master_volume--;
+    while (volume_incr_carry <= -2) {
+        if (master_volume > 0)
+            master_volume--;
 
-		volume_incr_carry += 2;		
-	}
+        volume_incr_carry += 2;
+    }
 
-	if (master_volume > 64)
-		master_volume = 0; // weird, flash_load error?
+    if (master_volume > 64)
+        master_volume = 0; // weird, flash_load error?
 
-	set_volume_balance_relays();
-	volume_display( 1);
-	usb_write( vol_msg, (byte)3); // three-char message
+    set_volume_balance_relays();
+    volume_display(1);
+    usb_write(vol_msg, (byte) 3); // three-char message
 }
 
-void balance_update(void)
-{
-	if (power < 2 || muted)
-		return;
+void balance_update(void) {
+    if (power < 2 || muted || isRelaixedSE)
+        return;
 
-	// Similar carefull updating as for volume...
-	balance_incr_carry += balance_incr;
-	balance_incr = 0; // quick copy-and-reset: avoid intermediate interrupts
+    // Similar carefull updating as for volume...
+    balance_incr_carry += balance_incr;
+    balance_incr = 0; // quick copy-and-reset: avoid intermediate interrupts
 
-	while (balance_incr_carry >= 2)
-	{
-		if (master_balance < 9)
-			master_balance++;
+    while (balance_incr_carry >= 2) {
+        if (master_balance < 9)
+            master_balance++;
 
-		balance_incr_carry -= 2;		
-	}
+        balance_incr_carry -= 2;
+    }
 
-	while (balance_incr_carry <= -2)
-	{
-		if (master_balance > -9)
-			master_balance--;
+    while (balance_incr_carry <= -2) {
+        if (master_balance > -9)
+            master_balance--;
 
-		balance_incr_carry += 2;		
-	}
+        balance_incr_carry += 2;
+    }
 
-	set_volume_balance_relays();
+    set_volume_balance_relays();
 
-	if (master_balance >= 0)
-	{
-		display_set_alt( DIGIT_dark, master_balance, 2);
-	} else
-	{
-		display_set_alt( DIGIT_minus, -master_balance, 2);
-	}
+    if (master_balance >= 0) {
+        display_set_alt(DIGIT_dark, master_balance, 2);
+    } else {
+        display_set_alt(DIGIT_minus, -master_balance, 2);
+    }
 }
 
-void mute(void)
-{
-	if (power != 2)
-		return;
+void mute(void) {
+    if (power != 2)
+        return;
 
-	muted = 1;
-	set_relays(0x00, power, 0x00, 0x00, 0x00);
-	display_set( 0x00, 0x00, 1);	
+    muted = 1;
+    set_relays(power, 0x00, 0x00, 0x00);
+    display_set(0x00, 0x00, 1);
 }
 
-void unmute(void)
-{
-	if (power != 2)
-		return;
+void unmute(void) {
+    if (power != 2)
+        return;
 
-	volume_incr = 0;
-	volume_update();	
+    volume_incr = 0;
+    volume_update();
 }
 
 void channel_update(void) {
@@ -255,9 +264,9 @@ void channel_update(void) {
     channel += channel_incr;
     channel_incr = 0;
 
-    n_channels = 6; // default relaixed
+    n_channels = isRelaixedXLR ? 6 : 4; // default relaixed
     if (dac_status() != DAC_ABSENT)
-        n_channels = 9; // 4 digital inputs into one analog input
+        n_channels += 3; // 4 digital inputs into one analog input
 
     while (channel > n_channels)
         channel -= n_channels;
@@ -284,13 +293,13 @@ void channel_update(void) {
         chan_msg[4] = 'e';
         usb_write(chan_msg, (byte) 5);
         // first: do max attenuation om current input channel
-        set_relays(0x00, power, old_channel, 0x01, 0x01);
+        set_relays(power, old_channel, 0x01, 0x01);
         //sleep 15msec;
         start_time = display_cnt;
         while (display_cnt != start_time + 3)
             ; // display_cnt increments at 183 Hz
         // second: switch input channel while holding attenuation.
-        set_relays(0x00, power, analog_channel, 0x01, 0x01);
+        set_relays(power, analog_channel, 0x01, 0x01);
         // Let new input DC levels settle...
         //sleep 160msec;
         while (display_cnt != start_time + 30)
@@ -303,77 +312,72 @@ void channel_update(void) {
 }
 
 // channel_set with absolute channel number as argument, called from ir_receiver only
-void channel_set( unsigned char new_ch)
-{
-	if (dac_status() == DAC_ABSENT && new_ch > 6)
-		return; // silently ignore unsupported button
 
-	channel_incr = new_ch - channel;
-	channel_update();
+void channel_set(unsigned char new_ch) {
+    if (dac_status() == DAC_ABSENT && new_ch > 6)
+        return; // silently ignore unsupported button
+
+    channel_incr = new_ch - channel;
+    channel_update();
 }
 
-void power_update(void)
-{
-	// maintain different power states:
-	// 0: audio is muted, analog power is off, minimal stand-by power
-	// 1: analog power is switched-on, audio is muted, timer running to enter next power level
-	// 2: analog power is on, audio is on
+void power_update(void) {
+    // maintain different power states:
+    // 0: audio is muted, analog power is off, minimal stand-by power
+    // 1: analog power is switched-on, audio is muted, timer running to enter next power level
+    //    In relaixedSE: soft-power is on with series damping resistors
+    // 2: analog power is full on, audio is on
 
-	char chan_msg[] = {'P', '0'};
+    char chan_msg[] = {'P', '0'};
 
-	if (power_incr == -1 && power != 0)
-	{
-		// first do audio mute...
-		set_relays(0x00, power, 0x00, 0x00, 0x00);
-		display_set( DIGIT_dark, DIGIT_dark, 1);
-		// and follow immediatly with analog power shutdown
+    if (power_incr == -1 && power != 0) {
+        // first do audio mute...
+        set_relays(power, 0x00, 0x00, 0x00);
+        display_set(DIGIT_dark, DIGIT_dark, 1);
+        // and follow immediatly with analog power shutdown
 
         // set volume-state down AFTER power-state down,
         // otherwise an interrupt-flash-tick might store a (wrong) 0 volume to flash
-		power = 0;
-		master_volume = 0; 
-		volume_incr_carry = 0;
-		set_relays(0x00, 0x00, 0x00, 0x00, 0x00);
-	} else if (power_incr > 0 && power == 0)
-	{
-		power = 1;
-		display_set( 0x00, 0x00, 1);
-		set_relays(0x00, power, 0x00, 0x00, 0x00);
-		// Enable analog power, stay in mute
-		// Later, from the 'power_tick' counter, power will be incremented to 2
-	} else if (power_incr > 0 && power == 1)
-	{
-		power = 2;
-		flash_load(KeyVolume, &StoreVolume.key);
-		volume_incr = 0;
-		channel_incr = 0;
-		balance_incr = 0;
-		muted = 0;
-		volume_update();  // shows volume in display
-		channel_update(); // shows channel in temporary display
+        power = 0;
+        master_volume = 0;
+        volume_incr_carry = 0;
+        set_relays(0x00, 0x00, 0x00, 0x00);
+    } else if (power_incr > 0 && power == 0) {
+        power = 1;
+        display_set(0x00, 0x00, 1);
+        set_relays(power, 0x00, 0x00, 0x00);
+        // Enable analog power, stay in mute
+        // Later, from the 'power_tick' counter, power will be incremented to 2
+    } else if (power_incr > 0 && power == 1) {
+        power = 2;
+        flash_load(KeyVolume, &StoreVolume.key);
+        volume_incr = 0;
+        channel_incr = 0;
+        balance_incr = 0;
+        muted = 0;
+        volume_update(); // shows volume in display
+        channel_update(); // shows channel in temporary display
 
-		PIR2bits.LVDIF = 0;
-		PIE2bits.LVDIE = 1; // watch power-supply level for drops
-	}
+        PIR2bits.LVDIF = 0;
+        PIE2bits.LVDIE = 1; // watch power-supply level for drops
+    }
 
-	power_incr = 0;
-	chan_msg[1] = '0' + power;
-	usb_write( chan_msg, (byte)2); // two-char message
+    power_incr = 0;
+    chan_msg[1] = '0' + power;
+    usb_write(chan_msg, (byte) 2); // two-char message
 }
 
-void flash_volume_channel(void)
-{
-	char flash_msg[] = {'F', 'v'};
+void flash_volume_channel(void) {
+    char flash_msg[] = {'F', 'v'};
 
-	if (power != 2)
-		return; // Only save volume in power-up steady-state
+    if (power != 2)
+        return; // Only save volume in power-up steady-state
 
-	StoreVolume.key = KeyVolume; // Just to be sure, suppress flash errors
-	flash_store(KeyVolume, StoreVolume.words);
-	usb_write( flash_msg, (byte)2); // two-char message
+    StoreVolume.key = KeyVolume; // Just to be sure, suppress flash errors
+    flash_store(KeyVolume, StoreVolume.words);
+    usb_write(flash_msg, (byte) 2); // two-char message
 }
 
-char power_state(void)
-{
-	return power;
+char power_state(void) {
+    return power;
 }

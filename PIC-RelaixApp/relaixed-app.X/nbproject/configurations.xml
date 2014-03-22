@@ -84,8 +84,8 @@
         <makeCustomizationNormalizeHexFile>false</makeCustomizationNormalizeHexFile>
       </makeCustomizationType>
       <C18>
-        <property key="code-model" value="mS"/>
-        <property key="data-model" value="Oa-"/>
+        <property key="code-model" value="ms"/>
+        <property key="data-model" value="oa-"/>
         <property key="default-char-unsigned" value="false"/>
         <property key="enable-all-optimizations" value="true"/>
         <property key="enable-int-promotion" value="false"/>
@@ -101,7 +101,7 @@
         <property key="enable-ot" value="false"/>
         <property key="enable-ou" value="false"/>
         <property key="enable-ow" value="true"/>
-        <property key="extra-include-directories" value="..;"/>
+        <property key="extra-include-directories" value=".."/>
         <property key="optimization-master" value="Custom"/>
         <property key="preprocessor-macros" value=""/>
         <property key="procedural-abstraction-passes" value="0"/>
@@ -135,10 +135,11 @@
         <property key="stack-analysis-mplink" value="false"/>
       </C18LanguageToolchain>
       <PICkit2PlatformTool>
+        <property key="pk2settings.3state" value="false"/>
+        <property key="pk2settings.preserveee" value="false"/>
         <property key="pk2settings.setvddvoltage" value="3,25"/>
-        <property key="tracecontrol.disablemacros" value="true"/>
-        <property key="tracecontrol.medium" value="0"/>
-        <property key="tracecontrol.select" value="0"/>
+        <property key="pk2settings.userpgmexec" value="true"/>
+        <property key="pk2settings.usetargetpower" value="false"/>
       </PICkit2PlatformTool>
     </conf>
   </confs>
