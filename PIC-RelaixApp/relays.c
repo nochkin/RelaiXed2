@@ -26,6 +26,8 @@
  * An I2C protocol deadlock can hang-up the entire PIC.
  * The low-level I2C driver code should better be rewritten to resolve this!
  ********************************************************************/
+#define M_RELAY
+
 #include <i2c.h>
 #include <stdio.h>
 #include "typedefs.h"
@@ -34,6 +36,10 @@
 #include "amp_state.h"
 #include "relays.h"
 #include "display.h"
+
+// BoardId on I2C bus, as addr bits in I2C. values are ((0..7)<<1);
+static byte relayBoardId   = 0;
+byte relayBoardType = 0;
 
 // Local version, adapted from the provided one in C18/pmc_common library
 
@@ -53,19 +59,60 @@ static unsigned char writeI2C(unsigned char data_out) {
 
 // Configure mode and initial conditions in the
 // I2C receiver (MCP23017) in the relay board(s)
-
 char relay_boards_init(void) {
-    char err;
+    char err = 0;
+    byte i, portA_init;
+    char i2c_msg[9] = {'B', 'o', 'a', 'r', 'd', ' ', 'E', 'R', 'R'};
+
+    // Check for relay board type, try twice..
+    for (i=0; i<2; i++) {
+        StartI2C();
+        err = writeI2C(0x40); // address MCP23017 on board with addr/id 0
+        StopI2C();
+        if (!err) {
+            relayBoardType = RELAIXED_XLR;
+            relayBoardId = 0;
+            break;
+        }
+        StartI2C();
+        err = writeI2C(0x48); // address MCP23017 on board with A2==1
+        StopI2C();
+        if (!err) {
+            relayBoardType = RELAIXED_SE;
+            relayBoardId = 8;
+            break;
+            }
+    }
+    if (err) {
+        usb_write(i2c_msg, (byte) 9);
+        return err;
+    }
+
     // Leave IOCON reg is default (=0) state: has auto address increment
-    // Set both port A and B as all-output
+
+    // Set init values for MCP23017 output pins
+    portA_init = 0;
+    if (isRelaixedSE)
+        portA_init = 0xff; // unbuffered drive to relays, low active
+
     StartI2C();
-    err = writeI2C(0x40) || // address MCP23017 on board with addr/id 0
-            writeI2C(0x00) || // select on-chip register addr 0;
-            writeI2C(0x00) || // IODIRA = 0 (all output)
-            writeI2C(0x00); // IODIRB = 0 (all output)
+    writeI2C(0x40 | relayBoardId) || // address MCP23017
+    writeI2C(0x12) || // addr of GPIOA register
+    writeI2C(portA_init) || // to GPA[0..7]
+    writeI2C(0); // to GPB[0..7]
     StopI2C();
 
-    return err;
+    // Set both port A and B as all-output
+    StartI2C();
+    writeI2C(0x40 | relayBoardId) || // address MCP23017 on board with addr/id 0
+    writeI2C(0x00) || // select on-chip register addr 0;
+    writeI2C(0x00) || // IODIRA = 0 (all output)
+    writeI2C(0x00); // IODIRB = 0 (all output)
+    StopI2C();
+
+    byte2hex(i2c_msg + 6, relayBoardId);
+    usb_write(i2c_msg, (byte) 8);
+    return 0;
 }
 
 void mcp23017_output(byte chip_addr, WORD data) {
@@ -77,17 +124,15 @@ void mcp23017_output(byte chip_addr, WORD data) {
     StopI2C();
 }
 
-void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r) {
+void set_relays(byte power, byte channel, byte vol_l, byte vol_r) {
     // 'power' off is 0, non-zero is power on.
+    // In relaixedSE: power==1: temp 'soft power' state with series resistors
+    //                power==2: full power on.
     // channel is 1..6 for input selection, 0 for mute
     // vol_[rl] ranges from 0..64
     byte chip_addr;
-    WORD i2c_data, i2c_tmp;
+    WORD i2c_data;
     char i2c_msg[9] = {'I', '2', 'C', ':', '0', '0', ',', '0', '0'};
-    char i2c_vol[4] = {'I', '2', 'C', '-'};
-    static WORD i2c_prev = 0;
-
-    board_id = 0; // for now....
 
     if (!power)
         channel = 0; // channel==0 means 'mute'.
@@ -103,34 +148,29 @@ void set_relays(byte board_id, byte power, byte channel, byte vol_l, byte vol_r)
     }
 
     // encode new state in 16-bit word for relay board state
-    LSB(i2c_data) = (vol_r << 6) | vol_l;
-    MSB(i2c_data) = (channel << 4) | (vol_r >> 2);
-    if (power)
-        MSB(i2c_data) |= 0x80;
+    if (isRelaixedXLR) {
+        LSB(i2c_data) = (vol_r << 6) | vol_l; // PortB
+        MSB(i2c_data) = (channel << 4) | (vol_r >> 2); // PortA
+        if (power)
+            MSB(i2c_data) |= 0x80;
+    } else {
+        // isRelaixedSE: relaixedPassive
+        byte tmpA;
+        LSB(i2c_data) = vol_l;
+        if (power > 1) // full power on, major power relay
+            LSB(i2c_data) |= 0x40;
+        tmpA = 0xff; // portA is low-active!
+        if (power > 0 && channel > 0 && channel <= 4)
+            tmpA = ~(1 << (channel-1)); // decoded channel, active low
+        if (power > 0)
+            tmpA &= 0x3F; // double line to soft-power-relay, active low
+        MSB(i2c_data) = tmpA;
+    }
 
     /////////////////// Perform I2C transmission /////////////////////
     // Need bus-reset of device-reset here, to recover from lockup on erroneous bus transfers??
-    chip_addr = 0x40 | (board_id << 1);
-
-    i2c_tmp._word = i2c_data._word & i2c_prev._word;
-    if (i2c_tmp._word != i2c_data._word
-            && i2c_tmp._word != i2c_prev._word
-            && (MSB(i2c_data) & 0xf0) == (MSB(i2c_prev) & 0xf0)) {
-        byte start_cnt;
-        usb_write(i2c_vol, (byte) 4);
-        // Channel stays same, Update volume in 2 steps:
-        // first issue an intermediate value, to prevent high-volume audio
-        // bursts in the output during the relay switch time
-
-        mcp23017_output(chip_addr, i2c_tmp);
-
-        start_cnt = display_cnt;
-        while (display_cnt != start_cnt + 4)
-            ; // wait for about 20 msec.
-    }
+    chip_addr = 0x40 | relayBoardId;
     mcp23017_output(chip_addr, i2c_data);
-    i2c_prev = i2c_data;
-
 
     //////////////////// Log output to USB if logging is on /////////////////
     // vsprintf( i2c_msg, "I2C:%02x,%02x", i2c_portA, i2c_portB); why not OK??

@@ -168,9 +168,9 @@ void main(void) {
     display_set_alt(0x00, 0x00, 0x00);
     display_set(0x00, 0x00, 1);
     ir_receiver_init();
-    err = relay_boards_init();
-    set_relays(0x00, 0x00, 0x00, 0x00, 0x00);
+    err = relay_boards_init(); // as side-effect: determine board Type and Id
     amp_state_init();
+    set_relays(0x00, 0x00, 0x00, 0x00);
 
     if (err)
         display_set_alt(DIGIT_E, 0x01, 3);
@@ -229,7 +229,7 @@ void main(void) {
                 flash_volume_channel();
             } else if (power_incr > 0 && power_state() == 0) {
                 // if we move power_state from 0 to 1, we surely want to go later to 2
-                power_tick = 500;
+                power_tick = (isRelaixedXLR) ? 500 : 900;
             }
 
             if (power_incr > 0)
