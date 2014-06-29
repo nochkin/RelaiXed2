@@ -23,7 +23,6 @@
  ********************************************************************/
 #include <i2c.h>
 #include <stdio.h>
-#include "typedefs.h"
 #include "amp_state.h"
 #include "display.h"
 #include "usb_io.h"
@@ -39,17 +38,18 @@ byte dac_status( void)
 // Local version, adapted from the provided one in C18/pmc_common/i2c/i2c1writ.c
 static unsigned char writeI2C( unsigned char data_out )
 {
-  SSP1BUF = data_out;           // write single byte to SSPBUF
-  if ( SSP1CON1bits.WCOL )      // test if write collision occurred
-    return ( -1 );              // if WCOL bit is set return negative #
-  else if( ((SSP1CON1&0x0F)==0x08) || ((SSP1CON1&0x0F)==0x0B) )	//master mode only
-  { 
-	 	while( SSP1STATbits.BF );   // wait until write cycle is complete   
+    SSP1BUF = data_out;           // write single byte to SSPBUF
+    if ( SSP1CON1bits.WCOL )      // test if write collision occurred
+        return -1;              // if WCOL bit is set return negative #
+    else if( ((SSP1CON1&0x0F)==0x08) || ((SSP1CON1&0x0F)==0x0B) )	//master mode only
+    {
+        while( SSP1STATbits.BF );   // wait until write cycle is complete
 	    IdleI2C();                 // ensure module is idle
 	    if ( SSP1CON2bits.ACKSTAT ) // test for ACK condition received
-	    	 return ( -2 );			// return NACK
-		else return ( 0 );              //return ACK
-  }
+                return  -2;			// return NACK
+            else return  0;              //return ACK
+    }
+    return -2;
 }
 
 static unsigned char readI2C( void )

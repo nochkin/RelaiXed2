@@ -21,7 +21,6 @@
  * Data struct definition of BufferDescriptor as shared with USB hardware engine
  *****************************************************************************/
 #include <p18cxxx.h>
-#include "typedefs.h"
 #include "usb_io.h"
  
 typedef union _BD_STAT
@@ -93,10 +92,10 @@ typedef union _BDT
 #define HID_INT_IN_EP_SIZE      64
 
 /* locations of ep1Bo and ep1io taken from the memory-map of the bootloader! */
-#pragma udata usb_endpoints=0x000408
-volatile far BDT ep1Bo;
-volatile far BDT ep1Bi;
-#pragma udata
+//#pragma udata usb_endpoints=0x000408
+volatile BDT ep1Bo;
+volatile BDT ep1Bi;
+//#pragma udata
 
 #define  hid_report_in  (HID_BD_IN.ADR)
 #define  hid_report_out (HID_BD_OUT.ADR)

@@ -13,6 +13,7 @@ typedef enum
 	KeyVolume
 } StorageKey;
 
+
 extern void storage_init(void);
 extern void flash_store(StorageKey key, const unsigned int *w);
 extern void flash_load(StorageKey key, char *p);

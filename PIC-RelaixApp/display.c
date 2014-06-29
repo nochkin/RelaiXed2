@@ -21,20 +21,20 @@
  *
  * Main acess function is 'display()', which is called from ISR of Timer4.
  ********************************************************************/
-#include "typedefs.h"
+#include <stdint.h>
 #include "io_cfg.h"
 
 /* Exported globals */
-byte display_cnt; // increments on every display refresh (is at 160Hz)
+volatile uint8_t display_cnt; // increments on every display refresh (is at 160Hz)
 
 /* Local vars */
-static byte segment_data[4];
-static byte alt_display_cnt;
+static uint8_t segment_data[4];
+static uint8_t alt_display_cnt;
 
 /* segment-table: bits [3:0] are for PORTB[3:0],
  * bits [6:4] are moved to PORTC[2:0].
  */
-static rom near char segment_table[] = {
+const static char segment_table[] = {
 	8, 94, 34, 66, 84, 65, 1, 90, 0, 64, /* '0' - '9' */
 	16, 5, 41, 6, 33, 49, /* 'A' - 'F' */
 	119 /* '-' */,
@@ -51,7 +51,7 @@ static rom near char segment_table[] = {
 // We toggle 'LEDright' (digit select), giving multiplex frequency of 91.5Hz.
 void display_isr(void)
 {
-	byte segment, inx;
+	uint8_t segment, inx;
 	display_cnt++;
 
 	/* choose which segment to display */
@@ -83,7 +83,7 @@ void display_isr(void)
 	PORTC &= 0x78;
 }
 	
-void display_set(byte digit_hi, byte digit_lo, char override)
+void display_set(uint8_t digit_hi, uint8_t digit_lo, uint8_t override)
 {
 	segment_data[0] = segment_table[digit_lo];
 	segment_data[1] = segment_table[digit_hi];
@@ -92,7 +92,7 @@ void display_set(byte digit_hi, byte digit_lo, char override)
 		alt_display_cnt = 0;
 }	
 
-void display_set_alt( byte digit_hi, byte digit_lo, byte duration)
+void display_set_alt( uint8_t digit_hi, uint8_t digit_lo, uint8_t duration)
 {
 	segment_data[2] = segment_table[digit_lo];
 	segment_data[3] = segment_table[digit_hi];

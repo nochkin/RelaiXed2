@@ -49,11 +49,11 @@
 #pragma config WPCFG = OFF          //Write/Erase last page protect Disabled
 #pragma config WPDIS = OFF          //WPFP[5:0], WPEND, and WPCFG bits ignored
 
-
+#include <xc.h>
+#include <stdint.h>
 #include <p18cxxx.h>
 #include <stdio.h>
-#include <i2c.h>
-#include "typedefs.h"                   
+#include <plib/i2c.h>
 #include "io_cfg.h"
 #include "display.h"
 #include "usb_io.h"
@@ -64,8 +64,8 @@
 #include "dac_cntl.h"
 
 // Forward declarations
-void app_isr_high(void);
-void app_isr_low(void);
+//void app_isr_high(void);
+//void app_isr_low(void);
 void main(void);
 void check_usb_power(char);
 static void init(void);
@@ -77,6 +77,7 @@ static void init(void);
 //#endif
 
 
+#if 0
 // Normal operation. Built hex image should be inserted by bootloader
 #define _RESET 0x2000
 #define ISR_HI 0x2008
@@ -102,14 +103,15 @@ void app_interrupt_at_high_vector(void) {
 
 // low-priority interrupt vector: (not used if IPEN is clear)
 #pragma code app_isr_lo = ISR_LO
-
-void app_interrupt_at_low_vector(void) {
-#ifdef UseIPEN
-    _asm goto app_isr_low _endasm
-#else
-    _asm goto app_isr_high _endasm
 #endif
-}
+
+//void interrupt low_priority app_interrupt_at_low_vector(void) {
+//#ifdef UseIPEN
+//    _asm goto app_isr_low _endasm
+//#else
+//    _asm goto app_isr_high _endasm
+//#endif
+//}
 
 #ifdef NO_BOOTLOADER
 // the 3 functions below are a dummy bootloader replacement.
@@ -125,23 +127,24 @@ void app_interrupt_at_low_vector(void) {
 //{
 //	_asm goto _startup _endasm
 //}
-
+#if 0
 #pragma code boot_isr_hi=0x0008
 
 void boot_isr_high(void) {
     _asm goto app_interrupt_at_high_vector _endasm
 }
-#pragma code boot_isr_lo = 0x0018
+//#pragma code boot_isr_lo = 0x0018
 
 void boot_isr_low(void) {
     _asm goto app_interrupt_at_low_vector _endasm
 }
 #endif
 
-#pragma code
+//#pragma code
 // back to normal code allocation
+#endif
 
-static BOOL prev_usb_bus_sense;
+static bit prev_usb_bus_sense;
 static unsigned int volume_tick, usb_tick, chan_tick, flash_tick, ir_tick;
 static volatile unsigned int power_tick;
 static unsigned char dac_lock_tick;
@@ -153,7 +156,7 @@ void main(void) {
     unsigned int i;
     char usb_char, err;
     const char init_msg[] = {'I', 'N', 'I', 'T'};
-    extern FILE *stdout = _H_USER; // redirect stdout to USB
+    //extern FILE *stdout = _H_USER; // redirect stdout to USB
 
     init();
     storage_init();
@@ -186,7 +189,7 @@ void main(void) {
 
     // (re-)launch USB activity
     prev_usb_bus_sense = 0;
-    usb_write(init_msg, (byte) 4);
+    usb_write(init_msg, (uint8_t) 4);
 
     // The above 'set_relays' enabled the power relay for the analog supply.
     power_tick = 150;
@@ -223,7 +226,7 @@ void main(void) {
             channel_update();
 
         if (power_incr) {
-            if (flash_tick && power_incr < 0) {
+            if (flash_tick != 0 && power_incr < 0) {
                 // quickly save recent volume/balance update
                 flash_tick = 0;
                 flash_volume_channel();
@@ -290,9 +293,8 @@ void check_usb_power(char err) {
 }
 
 // Pick-up high-priority interrupts (or global interrupts if IPEN is clear)
-#pragma interrupt app_isr_high
 
-void app_isr_high(void) {
+void interrupt high_priority app_isr_high(void) {
     // Timer4 wrap-around timer event, issued at 183Hz rate
     // Used for display multiplexing, but also for various local time counters
     if (PIE3bits.TMR4IE && PIR3bits.TMR4IF) {
@@ -418,10 +420,9 @@ void app_isr_high(void) {
 }
 
 // Pick-up low-priority interrupts
+//#pragma interruptlow app_isr_low
 
-#pragma interruptlow app_isr_low
-
-void app_isr_low(void) {
+void interrupt low_priority app_isr_low(void) {
     // The PIC hardware will clear the 'GIEL' bit upon entering this isr.
     // With our boot-loader in place, that will happen already there.
     // The bootloader will take care of the USB interrupt PIR2bits.USBIF.

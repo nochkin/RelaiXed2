@@ -3,9 +3,9 @@
  *
  * Copyright 2010  Jos van Eijndhoven
  *****************************************************************************/
-#include "typedefs.h"
+#include <stdint.h>
 
-extern volatile byte display_cnt; // increments on every display refresh (is at 160Hz)
+extern volatile uint8_t display_cnt; // increments on every display refresh (is at 160Hz)
 
 #define DIGIT_A     10
 #define DIGIT_B     11
@@ -23,7 +23,6 @@ extern volatile byte display_cnt; // increments on every display refresh (is at 
 #define DIGIT_o		23
 
 extern void display_isr(void);
-extern void display_set(byte digit_hi, byte digit_lo, char override);
-extern void display_set_alt( byte digit_hi, byte digit_lo,
-							byte duration);
+extern void display_set(uint8_t digit_hi, uint8_t digit_lo, uint8_t override);
+extern void display_set_alt( uint8_t digit_hi, uint8_t digit_lo, uint8_t duration);
 
