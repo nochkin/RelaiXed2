@@ -21,7 +21,7 @@
  *
  *****************************************************************************/
 
-#include "typedefs.h"
+#include <stdint.h>
 #include "io_cfg.h"
 #include "usb_io.h"
 #include "ir_receiver.h"
@@ -60,12 +60,12 @@ static union store_IR
 {
 	struct
 	{
-		StorageKey key;
-		byte	_protocol;
-		byte	_device;
-		byte	_flags;
+		uint8_t key;
+		uint8_t	_protocol;
+		uint8_t	_device;
+		uint8_t	_flags;
 	};
-	unsigned int words[2];
+	uint16_t words[2];
 } StoreIR;
 #define flash_protocol StoreIR._protocol
 #define flash_device   StoreIR._device
@@ -76,12 +76,12 @@ static unsigned char device_prog_state;
 static unsigned short ircode, final_ircode, device;
 static IRprotocol protocol, final_protocol;
 
-static near rom void (*protocol_handler[5])(auto byte);
+static void (*protocol_handler[5])(uint8_t);
 
 // returns delay since previous call (reset) in units of Fosc/4 /256 = 21.3 usec
-static byte tmr_delay(void)
+static uint8_t tmr_delay(void)
 {
-	byte delay = TMR0L;
+	uint8_t delay = TMR0L;
 	TMR0L = 0; // reset timer0 and its prescaler
 	nedges++;
 
@@ -105,16 +105,16 @@ char ir_tmr_isr(void)
 
 	if (ok)
 	{
-		byte2hex( usb_tmr_msg+3, (byte)(ircode>>8));
-		byte2hex( usb_tmr_msg+5, (byte)(ircode&0x00ff));
+		byte2hex( usb_tmr_msg+3, (uint8_t)(ircode>>8));
+		byte2hex( usb_tmr_msg+5, (uint8_t)(ircode&0x00ff));
 		usb_tmr_msg[2] = ':';
 	} else
 	{
-		byte2hex( usb_tmr_msg+3, (byte)protocol);
-		byte2hex( usb_tmr_msg+5, (byte)nbits);
+		byte2hex( usb_tmr_msg+3, (uint8_t)protocol);
+		byte2hex( usb_tmr_msg+5, (uint8_t)nbits);
 		usb_tmr_msg[2] = '?';
 	}
-	usb_write( usb_tmr_msg, (byte)7);
+	usb_write( usb_tmr_msg, (uint8_t)7);
 
 	// reset to prepare for reception of next IR frame
 	ircode = 0;
@@ -148,7 +148,7 @@ char ir_tmr_isr(void)
 static char rc_got_half_period;
 static char rc_toggle;
 
-static void rc5_receive(auto byte delay)
+static void rc5_receive(uint8_t delay)
 {
 	char new_half_delay = delay < 63; //  < 1.5 T
 
@@ -189,7 +189,7 @@ static void rc5_receive(auto byte delay)
 //    stop  play : 0x31 0x2c
 //         power : 0x0c
 //       menu ok : 0x54 0x5c
-static void rc6_receive(auto byte delay)
+static void rc6_receive(uint8_t delay)
 {
 	char new_half_delay;
 
@@ -209,7 +209,7 @@ static void rc6_receive(auto byte delay)
 		if (INTCON2bits.INTEDG1) // rising edge, next-half-bit is dark
 			ircode |= 1;
 		if (nbits == 5)
-			rc_toggle = ((byte)ircode) & 0x01; // keep toggle, otherwise it is lost (shifted out)
+			rc_toggle = ((uint8_t)ircode) & 0x01; // keep toggle, otherwise it is lost (shifted out)
 	}
 	else if (!rc_got_half_period && new_half_delay)
 	{
@@ -238,7 +238,7 @@ static void rc6_receive(auto byte delay)
 //    vol-, vol+ : 0x13 0x12
 //  chan-, chan+ : 0x11 0x10
 //   bal.l bal.r : 0x26 0x27
-static void sirc_receive(auto byte delay)
+static void sirc_receive(uint8_t delay)
 {
 	if (INTCON2bits.INTEDG1) // rising edge, we just measured the light duration
 	{
@@ -251,7 +251,7 @@ static void sirc_receive(auto byte delay)
 	}
 }
 // This receiver simply ignores all subsequent incoming IR edges
-static void error_receive(auto byte delay)
+static void error_receive(uint8_t delay)
 {
 	ircode = 0xffff;
 }
@@ -260,9 +260,9 @@ static char usb_msg[] = {'I', 'R', '=', '0', '1', '2', '3'};
 // New edge is detected on IR receiver input: A down-edge corresponds to start of 'light'
 void ir_receiver_isr(void)
 {
-	static byte first_low;
+	static uint8_t first_low;
 
-	byte delay = tmr_delay(); // increments nedges
+	uint8_t delay = tmr_delay(); // increments nedges
 	INTCONbits.TMR0IF = 0;
 	INTCONbits.TMR0IE = 1; // Request interrupt after last edge: termination
 
@@ -320,7 +320,7 @@ void ir_receiver_isr(void)
 
 		//byte2hex( usb_msg+3, first_low);
 		//byte2hex( usb_msg+5, delay);
-		//usb_write( usb_msg, (byte)7); // I observe captured values are +/-2 accurate to nominal
+		//usb_write( usb_msg, (uint8_t)7); // I observe captured values are +/-2 accurate to nominal
 
 		break;
 	  default:
@@ -357,7 +357,7 @@ void ir_receiver_init(void)
     if (flash_protocol >= IR_error) // got illegal value from flash (empty = 0xFF)
         flash_protocol = IR_unknown; // reset to valid protocol value
     usb_msg_flash[5] = '0' + flash_protocol;
-    usb_write( usb_msg_flash, (byte)6);
+    usb_write( usb_msg_flash, (uint8_t)6);
 }
 
 // We recognized a special key-sequence on power-up,
@@ -376,7 +376,7 @@ static void freeze_ir_device(void)
 
 	usb_frz_msg[8] = (final_protocol == IR_sirc) ? 'S' : (final_protocol == IR_rc6) ? '6' : '5';
 	byte2hex( usb_frz_msg+9, device);
-	usb_write( usb_frz_msg, (byte)11);
+	usb_write( usb_frz_msg, (uint8_t)11);
 }
 
 char usb_msg_wrongdev[] = {'I','R','p',0,'d','e','v',0,0};
@@ -388,15 +388,15 @@ static void rc56_handle_code(void)
 	if (final_protocol == IR_rc6)
 	{
 		// rc_toggle was already extracted during receive
-		keycode = (byte)(final_ircode & 0x00ff);
-		device = (byte)(final_ircode >> 8);
+		keycode = (uint8_t)(final_ircode & 0x00ff);
+		device = (uint8_t)(final_ircode >> 8);
 	} else // rc5 or rc5x
 	{
 		rc_toggle = (final_ircode & 0x0800) != 0;
-		keycode = ((byte)final_ircode) & 0x003f;
+		keycode = ((uint8_t)final_ircode) & 0x003f;
 		if (final_ircode & 0x1000) // 13'th bit used for RC5X
 			keycode |= 0x40; // add as 7th command bit
-		device = (byte)(final_ircode >> 6) & 0x1f; // clear toggle-bit, keep 5 device bits
+		device = (uint8_t)(final_ircode >> 6) & 0x1f; // clear toggle-bit, keep 5 device bits
 	}
 
 	// The IR command is decoded for further processing in either one of the following cases:
@@ -411,11 +411,11 @@ static void rc56_handle_code(void)
             usb_msg_wrongdev[2] = 'p';
             usb_msg_wrongdev[3] = '0' + final_protocol;
             byte2hex( usb_msg_wrongdev+7, device);
-            usb_write( usb_msg_wrongdev, (byte)9);
+            usb_write( usb_msg_wrongdev, (uint8_t)9);
             usb_msg_wrongdev[2] = 'F';
             usb_msg_wrongdev[3] = '0' + flash_protocol;
             byte2hex( usb_msg_wrongdev+7, flash_device);
-            usb_write( usb_msg_wrongdev, (byte)9);
+            usb_write( usb_msg_wrongdev, (uint8_t)9);
             return;
         }
 
@@ -496,15 +496,15 @@ static void sirc_handle_code(void)
 	else // final_nbits == 15
 		final_ircode >>= 1;
 
-	keycode = (byte)(final_ircode & 0x007f);
-	device = (byte)(final_ircode >> 7);
+	keycode = (uint8_t)(final_ircode & 0x007f);
+	device = (uint8_t)(final_ircode >> 7);
 
 	if (flash_protocol > IR_unknown && device_prog_state == 0 && // some protocol was selected/stored before
 		(flash_protocol != IR_sirc || flash_device != device))
         {
             usb_msg_wrongdev[3] = '0' + final_protocol;
             byte2hex( usb_msg_wrongdev+7, device);
-            usb_write( usb_msg_wrongdev, (byte)9);
+            usb_write( usb_msg_wrongdev, (uint8_t)9);
             return;
         }
 

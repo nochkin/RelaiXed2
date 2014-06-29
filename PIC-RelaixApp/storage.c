@@ -34,56 +34,60 @@
  *        & board volumes: 1 header byte, 7 volumes
  * Key 3: 1 head byte, +3: master volume, channel select, LR-balance
  */
-#include <flash.h>
-#include "typedefs.h"
+#include <stdint.h>
+#include <plib/flash.h>
 #include "storage.h"
+
+// flash device properties
 #define FLASH_ERASED 0xFF
 #define FLASH_EMPTY  0x00
+#define FLASH_PAGESIZE 1024
+#if FLASH_ERASE_BLOCK > FLASH_PAGESIZE
+  error in flash configuration!
+#endif
 
 // Number of flash pages to save my state. (Each page is 1KBytes)
 // This number must be > 1 and a power-of-two
 #define N_PAGES 2
-static rom near StorageKey *current_page;
-static rom near StorageKey *key_ptr[MAX_KEYS];
+// pointers into flash memory space, not directly writable
+static const StorageKey *current_page;
+static const StorageKey *key_ptr[MAX_KEYS];
 static unsigned char curr_page_nr;
 
 static const unsigned char key_packet_sz[MAX_KEYS] = {16, 4, 16, 4};
 static union
 {
 	char chars[16];
-	unsigned int words[8];
+	uint16_t words[8];
 } packet_buf;
 
 // Pages of flash memory to store Relaixed state
-// Allocated to a page-aligned address in the linker script
-#pragma romdata my_storage
-static rom StorageKey storage_area[N_PAGES*FLASH_ERASE_BLOCK];
-#pragma romdata
+// Allocated to a 1K page-aligned address
+const StorageKey storage_area[N_PAGES*FLASH_PAGESIZE] @ 0x7400;
 
 static unsigned long flash_new_page(void);
 
 // find pointers into flash space that store Relaixed state variables
 void storage_init(void)
 {
-	rom near StorageKey *p;
 	StorageKey key;
 	unsigned char i, n;
 	unsigned int j;
 
 	// select current active flash page
 	// JvE: Need to update this 'if' in case N_PAGES > 2...
-	key = storage_area[FLASH_ERASE_BLOCK]; // start of page 1
+	key = storage_area[FLASH_PAGESIZE]; // start of page 1
 	if (key == FLASH_EMPTY || key == FLASH_ERASED)
 		curr_page_nr = 0; // try to append to (partially filled) page 0
 	else
 		curr_page_nr = 1;
-	current_page = &storage_area[curr_page_nr * FLASH_ERASE_BLOCK];
+	current_page = &storage_area[curr_page_nr * FLASH_PAGESIZE];
 	key = current_page[0]; //first item in currrent page
 
 	if (key == FLASH_EMPTY)
 	{
 		// set to 0 by linker, erase to 0xFF
-		EraseFlash((unsigned long)current_page, (unsigned long)(current_page + FLASH_ERASE_BLOCK - 1));
+		EraseFlash((unsigned long)current_page, (unsigned long)(current_page + FLASH_PAGESIZE - 1));
 		EECON1bits.WREN = 0;
 	}
 
@@ -92,7 +96,7 @@ void storage_init(void)
 		key_ptr[i] = 0;
 
 	for (j = 0;
-		 j < FLASH_ERASE_BLOCK && (key = current_page[j]) != FLASH_ERASED;
+		 j < FLASH_PAGESIZE && (key = current_page[j]) != FLASH_ERASED;
 		 j += n)
 	{
 		if (key > 0 && key < MAX_KEYS)
@@ -106,14 +110,14 @@ void storage_init(void)
 	// key_ptr[0] is reserved to point to the next available location to store new data.
 	// (Actual key numbers used as index in this table are always > 0.)
 	// When over-flowing into a new page, assume it is erased already...
-	if (j < FLASH_ERASE_BLOCK)
+	if (j < FLASH_PAGESIZE)
 		key_ptr[0] = current_page + j;
 	else
-		key_ptr[0] = curr_page_nr ? storage_area : storage_area + FLASH_ERASE_BLOCK;
+		key_ptr[0] = curr_page_nr ? storage_area : storage_area + FLASH_PAGESIZE;
 }
 
 // Storing data into flash, must be in units of 16-bit words and to aligned address.
-void flash_store(StorageKey key, const unsigned int *w)
+static void flash_store_page(StorageKey key, const unsigned int *w)
 {
 	unsigned char i, n, n_words;
 	unsigned long rom_addr = (unsigned long)key_ptr[0];
@@ -122,8 +126,9 @@ void flash_store(StorageKey key, const unsigned int *w)
 	n = key_packet_sz[key];
 	n_words = n >> 1;
 
-	if ((rom_addr & (FLASH_ERASE_BLOCK-1)) + n >= FLASH_ERASE_BLOCK)
-		rom_addr = flash_new_page();
+        // will fit: avoid recursive call
+	// if ((rom_addr & (FLASH_PAGESIZE-1)) + n >= FLASH_PAGESIZE)
+	//	rom_addr = flash_new_page();
 
 	for (i = 0; i < n_words; i++)
 	{
@@ -136,13 +141,27 @@ void flash_store(StorageKey key, const unsigned int *w)
 	key_ptr[key] = key_ptr[0];
 
 	// and update the pointer to free space:
-	key_ptr[0] = (rom near StorageKey *)rom_addr;
+	key_ptr[0] = (const StorageKey *)rom_addr;
+}
+
+void flash_store(StorageKey key, const unsigned int *w)
+{
+	unsigned char i, n, n_words;
+	unsigned long rom_addr = (unsigned long)key_ptr[0];
+	// The addrs in 'key_ptr' are multiples of 2 by construction.
+
+	n = key_packet_sz[key];
+
+	if ((rom_addr & (FLASH_PAGESIZE-1)) + n >= FLASH_PAGESIZE)
+		rom_addr = flash_new_page();
+
+        flash_store_page(key, w);
 }
 
 void flash_load(StorageKey key, char *p)
 {
 	unsigned char i, n;
-	rom near StorageKey *rom_p;
+	const StorageKey *rom_p;
 
 	n = key_packet_sz[key];
 	rom_p = key_ptr[key];
@@ -154,7 +173,7 @@ void flash_load(StorageKey key, char *p)
 	{
 		*p++ = key;
 		for (i = 1; i < n; i++)
-			*p++ = (byte)0;
+			*p++ = (uint8_t)0;
 	}
 }
 
@@ -163,16 +182,16 @@ void flash_load(StorageKey key, char *p)
 static unsigned long flash_new_page(void)
 {
 	unsigned char new_page_nr;
-	rom near StorageKey *new_page;
+	const StorageKey *new_page;
 	StorageKey key;
 
 	// select new page
 	new_page_nr = (curr_page_nr + 1) & (N_PAGES - 1); // N_PAGES is power-of-two
-	new_page = storage_area + new_page_nr * FLASH_ERASE_BLOCK;
+	new_page = storage_area + new_page_nr * FLASH_PAGESIZE;
 	
 	// Erase new flash page if not yet clean
 	if (new_page[0] != FLASH_ERASED)
-		EraseFlash((unsigned long)new_page, (unsigned long)(new_page + FLASH_ERASE_BLOCK - 1));
+		EraseFlash((unsigned long)new_page, (unsigned long)(new_page + FLASH_PAGESIZE - 1));
 
 	// Init new page with known key states (key 0 is dummy)
 	key_ptr[0] = new_page;	
@@ -181,11 +200,11 @@ static unsigned long flash_new_page(void)
 		if (!key_ptr[key]) continue;
 
 		flash_load(key, packet_buf.chars);
-		flash_store(key, packet_buf.words); // Note: this increments key_ptr[0]
+		flash_store_page(key, packet_buf.words); // Note: this increments key_ptr[0]
 	}
 
 	// new page is initialised. Now erase old page so that it is not selected at a next reboot
-	EraseFlash((unsigned long)current_page, (unsigned long)(current_page + FLASH_ERASE_BLOCK - 1));
+	EraseFlash((unsigned long)current_page, (unsigned long)(current_page + FLASH_PAGESIZE - 1));
 	EECON1bits.WREN = 0;
 
 	curr_page_nr = new_page_nr;
