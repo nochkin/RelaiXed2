@@ -98,8 +98,7 @@ static void set_volume_balance_relays(void) {
     }
 
     if (isRelaixedXLR) {
-        // Hmm... Microchip's C compiler wrongly implements signed >>
-        balance_right = (master_balance >> 1) | (master_balance & 0x80);
+        balance_right = master_balance >> 1;
         balance_left = balance_right - master_balance;
         volume_right = (int8_t) master_volume + balance_right;
         volume_left = (int8_t) master_volume + balance_left;
@@ -126,7 +125,7 @@ static void set_volume_balance_relays(void) {
         set_relays(power, analog_channel, tmp_l, tmp_r);
 
         start_cnt = display_cnt;
-        while (display_cnt != start_cnt + 3)
+        while (display_cnt != (uint8_t)(start_cnt + 3))
             ; // wait for about 15 msec.
     }
     set_relays(power, analog_channel, volume_left, volume_right);
@@ -303,13 +302,13 @@ void channel_update(void) {
         set_relays(power, old_channel, 0x00, 0x00);
         //sleep 15msec;
         start_time = display_cnt;
-        while (display_cnt != start_time + 3)
+        while (display_cnt != (uint8_t)(start_time + 3))
             ; // display_cnt increments at 183 Hz
         // second: switch input channel while holding attenuation.
         set_relays(power, analog_channel, 0x00, 0x00);
         // Let new input DC levels settle...
-        //sleep 160msec;
-        while (display_cnt != start_time + 30)
+        //sleep 100msec;
+        while (display_cnt != (uint8_t)(start_time + 20))
             ;
     }
     // Finally re-establish volume on new input channel
