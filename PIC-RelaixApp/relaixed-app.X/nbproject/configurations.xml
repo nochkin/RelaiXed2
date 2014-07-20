@@ -180,6 +180,7 @@
           </linkerLibItems>
         </linkerTool>
         <loading>
+          <loadableFile>HID Bootloader PIC18F46J50 Family.hex</loadableFile>
           <useAlternateLoadableFile>false</useAlternateLoadableFile>
           <parseOnProdLoad>false</parseOnProdLoad>
           <alternateLoadableFile></alternateLoadableFile>
@@ -272,7 +273,7 @@
         <property key="stack-size-low" value="auto"/>
         <property key="stack-size-main" value="auto"/>
         <property key="stack-type" value="compiled"/>
-        <appendMe value="--CODEOFFSET=0x2000"/>
+        <appendMe value="--CODEOFFSET=0x2000 --RAM=default,-060-077,-0400-04ff,-0800-0cff,-0e00-0f5f"/>
       </XC8-config-global>
     </conf>
   </confs>
