@@ -57,16 +57,16 @@ typedef union _BDT
 {
     struct
     {
-        BD_STAT Stat;
-        byte Cnt;
-        byte ADRL;                      //Buffer Address Low
-        byte ADRH;                      //Buffer Address High
+        volatile BD_STAT Stat;
+        volatile byte Cnt;
+        volatile byte ADRL;                      //Buffer Address Low
+        volatile byte ADRH;                      //Buffer Address High
     };
     struct
     {
-        unsigned :8;
-        unsigned :8;
-        byte* ADR;                      //Buffer Address
+        unsigned char _x;
+        unsigned char _y;
+        volatile byte* ADR;                      //Buffer Address
     };
 } BDT;                                  //Buffer Descriptor Table
 
@@ -93,8 +93,10 @@ typedef union _BDT
 
 /* locations of ep1Bo and ep1io taken from the memory-map of the bootloader! */
 //#pragma udata usb_endpoints=0x000408
-volatile BDT ep1Bo;
-volatile BDT ep1Bi;
+//volatile BDT ep1Bo;
+//volatile BDT ep1Bi;
+persistent BDT ep1Bo @ 0x408;
+persistent BDT ep1Bi @ 0x40C;
 //#pragma udata
 
 #define  hid_report_in  (HID_BD_IN.ADR)

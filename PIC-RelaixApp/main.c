@@ -77,6 +77,14 @@ static void init(void);
 
 #ifdef HAS_BOOTLOADER
 // application is compiled with --CODEOFFSET=0x2000
+// and --RAM=default,-060-077,-0400-04ff,-0800-0cff,-0e00-0f5f
+// to avoid using registers in this app that are used by the USB stack
+// (different from the default bootloader, mine is used at application time
+//  to send log messages!)
+// Furthermore, the project config inserts the bootloader hex image below 0x2000.
+// Next to these build options, no other source-code modifications are used
+// for bootload operation.
+// For 'real' operation, do NOT install the 'debug' version, that doesn't seem to work.
 #endif
 
 static bit prev_usb_bus_sense;
