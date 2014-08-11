@@ -22,6 +22,11 @@ https://relaixed2.svn.sourceforge.net/svnroot/relaixed2
 
 Revision History of (1) RelaiXedApp:
 ====================================
+RelaixedApp-20140811, svn rev. 73:
+----------------------------------
+ - Update the project configuration and all source files to use (the free version of)
+   Microchips XC8 compiler and MPLAB-X IDE.
+ - Added support for the RelaixedPassive target board, recognizing this type at run-time.
 
 RelaixedApp-20130701, svn rev. 64:
 ----------------------------------
