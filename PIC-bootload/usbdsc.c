@@ -174,10 +174,9 @@
 #include "usb.h"
 
 /** C O N S T A N T S ************************************************/
-#pragma romdata
 
 /* Device Descriptor */
-rom USB_DEV_DSC device_dsc=
+const USB_DEV_DSC device_dsc=
 {
     sizeof(USB_DEV_DSC),    // Size of this descriptor in bytes
     DSC_DEV,                // DEVICE descriptor type
@@ -197,7 +196,7 @@ rom USB_DEV_DSC device_dsc=
 };
 
 /* Configuration 1 Descriptor */
-CFG01={
+const cfg01_t cfg01={
     /* Configuration Descriptor */
     sizeof(USB_CFG_DSC),    // Size of this descriptor in bytes
     DSC_CFG,                // CONFIGURATION descriptor type
@@ -226,7 +225,7 @@ CFG01={
     0x00,                   // Country Code (0x00 for Not supported)
     HID_NUM_OF_DSC,         // Number of class descriptors, see usbcfg.h
     DSC_RPT,                // Report descriptor type
-    sizeof(hid_rpt01),      // Size of the report descriptor
+    sizeof(hid_rpt01_t),      // Size of the report descriptor
 
     /* Endpoint Descriptor */
     sizeof(USB_EP_DSC),DSC_EP,_EP01_IN,_INT,HID_INT_IN_EP_SIZE,0x01,
@@ -235,19 +234,19 @@ CFG01={
 /* Configuration 2 Descriptor */
 /* is not explicitly specified, but is an implicit copy of CFG01 */
 
-rom struct{byte bLength;byte bDscType;word string[1];}sd000={
+const struct{byte bLength;byte bDscType;word string[1];}sd000={
 sizeof(sd000),DSC_STR,0x0409};
 
-rom struct{byte bLength;byte bDscType;word string[25];}sd001={
+const struct{byte bLength;byte bDscType;word string[25];}sd001={
 sizeof(sd001),DSC_STR,
 'M','i','c','r','o','c','h','i','p',' ',
 'T','e','c','h','n','o','l','o','g','y',' ','I','n','c','.'};
 
-rom struct{byte bLength;byte bDscType;word string[9];}sd002={
+const struct{byte bLength;byte bDscType;word string[9];}sd002={
 sizeof(sd002),DSC_STR,
 'R','E','L','A','I','X','E','D','2'};
 
-rom struct{byte report[HID_RPT01_SIZE];}hid_rpt01={
+const hid_rpt01_t hid_rpt01={
 //	First byte is the "Item".  First byte's two LSbs are the number of data bytes that
 //  follow, but encoded (0=0, 1=1, 2=2, 3=4 bytes).
 //  bSize should match number of bytes that follow, or REPORT descriptor parser won't work.  The bytes
@@ -270,24 +269,22 @@ rom struct{byte report[HID_RPT01_SIZE];}hid_rpt01={
     0xC0}                   // End Collection
 };    
 
-rom const unsigned char *rom USB_CD_Ptr[]=
+const unsigned char * USB_CD_Ptr[]=
 {
-    (rom const unsigned char *rom)&cfg01, // Dummy placeholder for uncofigured state
-    (rom const unsigned char *rom)&cfg01, // Used for configuration 1
-    (rom const unsigned char *rom)&cfg01  // Configuration 2 is a copy of CFG 1
+    (const unsigned char *)&cfg01, // Dummy placeholder for uncofigured state
+    (const unsigned char *)&cfg01, // Used for configuration 1
+    (const unsigned char *)&cfg01  // Configuration 2 is a copy of CFG 1
 };
-rom const unsigned char *rom USB_SD_Ptr[]=
+const unsigned char * USB_SD_Ptr[]=
 {
-    (rom const unsigned char *rom)&sd000,
-    (rom const unsigned char *rom)&sd001,
-    (rom const unsigned char *rom)&sd002
+    (const unsigned char *)&sd000,
+    (const unsigned char *)&sd001,
+    (const unsigned char *)&sd002
 };
 
-rom pFunc ClassReqHandler[1]=
+const pFunc ClassReqHandler[1]=
 {
     &USBCheckHIDRequest
 };
-
-#pragma code
 
 /** EOF usbdsc.c ****************************************************/

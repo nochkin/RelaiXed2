@@ -105,17 +105,18 @@
 #define HID_NUM_OF_DSC          1		//Just the Report descriptor (no physical descriptor present)
 #define HID_RPT01_SIZE          29
 
+
 /* HID macros */
 #define mUSBGetHIDDscAdr(ptr)               \
 {                                           \
     if(usb_active_cfg != 0) \
-        ptr = (rom byte*)&cfg01.hid_i00a00; \
+        ptr = (const byte*)&cfg01.hid_i00a00; \
 }
 
 #define mUSBGetHIDRptDscAdr(ptr)            \
 {                                           \
     if(usb_active_cfg != 0)                 \
-        ptr = (rom byte*)&hid_rpt01;        \
+        ptr = (const byte*)&hid_rpt01;        \
 }
 
 #define mUSBGetHIDRptDscSize(count)         \

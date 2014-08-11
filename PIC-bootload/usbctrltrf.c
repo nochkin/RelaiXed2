@@ -44,13 +44,12 @@
 #include "usb.h"
 
 /** V A R I A B L E S ********************************************************/
-#pragma udata
 byte ctrl_trf_state;                // Control Transfer State
 byte ctrl_trf_session_owner;        // Current transfer session owner
 
 POINTER pSrc;                       // Data source pointer
 POINTER pDst;                       // Data destination pointer
-WORD wCount;                        // Data counter
+WORD_T wCount;                        // Data counter
 
 /********************************************************************
 Bug Fix: May 14, 2007 (#F7)
@@ -74,7 +73,6 @@ void USBCtrlTrfOutHandler(void);
 void USBCtrlTrfInHandler(void);
 
 /** D E C L A R A T I O N S **************************************************/
-#pragma code
 /******************************************************************************
  * Function:        void USBCtrlEPService(void)
  *
@@ -305,6 +303,9 @@ void USBCtrlTrfOutHandler(void)
  *****************************************************************************/
 void USBCtrlTrfInHandler(void)
 {
+    CTRL_TRF_SETUP xxx;
+    xxx.bAltID = 1;
+    
     mUSBCheckAdrPendingState();         // Must check if in ADR_PENDING_STATE
 
     if(ctrl_trf_state == CTRL_TRF_TX)
@@ -368,7 +369,7 @@ If not, then the original endpoint setup code will be executed.
  *****************************************************************************/
 void USBCtrlTrfTxService(void)
 {
-    WORD byte_to_send;
+    WORD_T byte_to_send;
 
     /*
      * First, have to figure out how many byte of data to send.
@@ -463,7 +464,7 @@ if a short packet has been sent or not.
  *****************************************************************************/
 void USBCtrlTrfRxService(void)
 {
-    WORD byte_to_read;
+    WORD_T byte_to_read;
 
     MSB(byte_to_read) = 0x03 & ep0Bo.Stat._byte;    // Filter out last 2 bits
     LSB(byte_to_read) = ep0Bo.Cnt;

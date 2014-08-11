@@ -32,22 +32,22 @@ extern byte usb_active_cfg;
 
 // high-priority interrupt vector:
 // or global interrupt vector in case IPEN is not set
-#pragma code high_vector=0x08
-void interrupt_at_high_vector(void)
+void interrupt interrupt_at_high_vector(void)
 {
+        // we have no means to start USB when plugged-in through its
+        // own interrupts :-(. On plug-in raise a (low prio) interrupt:
+        //if (usb_device_state == DETACHED_STATE && usb_bus_sense)
+        //    PIR2bits.USBIF = 1;
+        // hmm... bug... the above lines cause the relaixed app to never start :-(
+
 #ifdef UseIPEN
 	// with IPEN, high-priority is only used by the uploaded application
-	_asm goto ProgramMemStart+0x0008 _endasm
+	#asm
+            goto ProgramMemStart+0x0008
+        #endasm
 #else
-	_asm goto BootLoadIsr _endasm
+    BootLoadIsr();
 #endif
-}
-
-// low-priority interrupt vector: (not used if IPEN is clear)
-#pragma code low_vector=0x18
-void interrupt_at_low_vector(void)
-{
-	_asm goto BootLoadIsr _endasm
 }
 
 /******************************************************************************
@@ -55,36 +55,40 @@ void interrupt_at_low_vector(void)
  * The 'bootload' code was originally in a while(1) loop in main,
  * but is now activated through the USBIF interrupt
  *****************************************************************************/
-#pragma code
 
 // When using dual-priority feature (UseIPEN), the USB interrupts are low-priority
 #ifdef UseIPEN
-#pragma interruptlow BootLoadIsr
-void BootLoadIsr(void)
+//#pragma interruptlow BootLoadIsr
+void interrupt low_priority interrupt_at_low_vector(void)
 {
 	// The PIC hardware will clear the 'GIEL' bit upon entering this isr.
 	if (PIR2bits.USBIF && PIE2bits.USBIE)
+        //   || (usb_device_state == DETACHED_STATE && usb_bus_sense != 0))
+        // this || state..  should launch the USB system, but is not good enough :-(
 	{
 		USBSubSystem();
 	}
 	else
 	{
-    	_asm goto ProgramMemStart+0x0018 _endasm
+    	#asm
+            goto ProgramMemStart+0x0018
+        #endasm
     	// return-from-isr is done in application program
  	}
  	// The 'return from interruptlow' instruction will set the GIEL bit again
 }
 #else
-#pragma interrupt BootLoadIsr
-void BootLoadIsr(void)
+void interrupt low_priority interrupt_at_low_vector(void)
 {
-	if (PIR2bits.USBIF && PIE2bits.USBIE)
+        if (PIR2bits.USBIF && PIE2bits.USBIE)
 	{
 		USBSubSystem();
 	}
 	else
 	{
-    	_asm goto ProgramMemStart+0x0008 _endasm
+    	#asm
+            goto ProgramMemStart+0x0008
+        #endasm
     	// return-from-isr is done in application program
  	}
  	// The 'return from interruptlow' instruction will set the GIEL bit again
@@ -104,12 +108,13 @@ void USBSubSystem(void)
     {   USBCheckBusStatus(); // Must use polling method
     } while (usb_device_state == ATTACHED_STATE);
         // Must use polling method
-		// Hope to achieve POWERED_STATE. on fail, reach DETACHED_STATE
+	// Hope to achieve POWERED_STATE. on fail, reach DETACHED_STATE
+
 	
 	if (usb_device_state > ATTACHED_STATE)
 	{
-		// UIE = 0xff; // allow all USB interrupts
-    	USBDriverService(); // Interrupt or polling method
+            UIE = 0xff; // allow all USB interrupts
+            USBDriverService(); // Interrupt or polling method
  	}   	
 	else
 	{
@@ -118,8 +123,8 @@ void USBSubSystem(void)
 		// UIR = 0x00;
  	}
  	TXADDRL = usb_device_state;	// JvE: HACK for observability to boot-loaded application
-	UIE = 0x3D;
-	PIE2bits.USBIE = 1; // restore
+	//UIE = 0x3D;
+	//PIE2bits.USBIE = 1; // restore
   	
 	if((usb_device_state == CONFIGURED_STATE) && (UCONbits.SUSPND != 1) &&
 		BootState == 0x00 && !mHIDRxIsBusy() && usb_active_cfg == 1)

@@ -89,7 +89,7 @@ extern byte ctrl_trf_session_owner;
 
 extern POINTER pSrc;
 extern POINTER pDst;
-extern WORD wCount;
+extern WORD_T wCount;
 
 /** P U B L I C  P R O T O T Y P E S *****************************************/
 byte USBCtrlEPService(void);			// Bug Fix - Work around, void->byte
