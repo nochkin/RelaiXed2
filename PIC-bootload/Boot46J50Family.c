@@ -165,12 +165,12 @@ typedef union
 		struct{						//For lock/unlock config command
 			unsigned char Command;
 			unsigned char LockValue;
+                        unsigned char LockPadBytes[62];
 		};
 } PacketToFromPC;		
 	
 
 /** V A R I A B L E S ********************************************************/
-#pragma udata SectionBootLoader
 unsigned char MaxPageToErase;
 unsigned short long ProgramMemStopAddress;
 PacketToFromPC PacketFromPC;
@@ -185,13 +185,12 @@ static byte stay_in_bootload;
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 void BlinkUSBStatus(void);
 void UserInit(void);
-void EraseFlash(void);
+void EraseFlash2(void);
 void WriteFlashSubBlock(void);
 void LongDelay(void);
 
 
 /** D E C L A R A T I O N S **************************************************/
-#pragma code
 void UserInit(void)
 {
 	//Initialize bootloader state variables
@@ -235,7 +234,7 @@ void ProcessBootLoad(void)
 	PIE3 = 0;
 	UIE = 0x3D;
 	PIE2bits.USBIE = 1; // restore
-	
+
 	do
 	{
 		ProcessIO();
@@ -284,7 +283,7 @@ void ProcessBootLoad(void)
 void ProcessIO(void)
 {
 	unsigned char i;
-
+        
 	if(BootState == Idle)
 	{
 		if(!mHIDRxIsBusy())	//Did we receive a command?
@@ -314,7 +313,7 @@ void ProcessIO(void)
 				PacketToPC.Length2 = (unsigned long)ConfigWordsSectionLength;
 				PacketToPC.EndOfTypes = TypeEndOfTypeList;
 				//Init pad bytes to 0x00...  Already done after we received the QUERY_DEVICE command (just after calling HIDRxReport()).
-	
+
 				if(!mHIDTxIsBusy())
 				{
 					HIDTxReport((char *)&PacketToPC, 64);
@@ -340,17 +339,18 @@ void ProcessIO(void)
 			case ERASE_DEVICE:
 			{
 				// JvE: make sure we will not enter some Relaixed high-priority isr that does not exist anymore
-				stay_in_bootload = 1;
-				PIE1 = 0;
-				PIE2 = 0;
-				PIE3 = 0;
-				INTCON3 = 0;
-				PIE2bits.USBIE = 1; // restore
+                                // JvE 20140810:  TODO rethink this method in light of new compiler...
+				//stay_in_bootload = 1;
+				//PIE1 = 0;
+				//PIE2 = 0;
+				//PIE3 = 0;
+				//INTCON3 = 0;
+				//PIE2bits.USBIE = 1; // restore
 
 				for(ErasePageTracker = StartPageToErase; ErasePageTracker < (MaxPageToErase + 1); ErasePageTracker++)
 				{
 					ClrWdt();
-					EraseFlash();
+					EraseFlash2();
 					USBDriverService(); 	//Call USBDriverService() periodically to prevent falling off the bus if any SETUP packets should happen to arrive.
 				}
 				BootState = Idle;				
@@ -359,12 +359,13 @@ void ProcessIO(void)
 			case PROGRAM_DEVICE:
 			{
 				// JvE: make sure we will not enter some Relaixed isr that does not exist anymore
-				stay_in_bootload = 1;
-				PIE1 = 0;
-				PIE2 = 0;
-				PIE3 = 0;
-				INTCON3 = 0;
-				PIE2bits.USBIE = 1; // restore
+                                // JvE 20140810:  TODO rethink this method in light of new compiler...
+				//stay_in_bootload = 1;
+				//PIE1 = 0;
+				//PIE2 = 0;
+				//PIE3 = 0;
+				//INTCON3 = 0;
+				//PIE2bits.USBIE = 1; // restore
 
 				if(ProgrammedPointer == (unsigned short long)InvalidAddress)
 					ProgrammedPointer = PacketFromPC.Address;
@@ -403,9 +404,9 @@ void ProcessIO(void)
 				TBLPTR = (unsigned short long)PacketFromPC.Address;
 				for(i = 0; i < PacketFromPC.Size; i++)
 				{
-					_asm
+					#asm
 					tblrdpostinc
-					_endasm
+					#endasm
 					PacketToPC.Data[i+((TotalPacketSize - 6) - PacketFromPC.Size)] = TABLAT;					
 				}
 
@@ -436,6 +437,9 @@ void ProcessIO(void)
 				BootState = Idle;
 			}
 				break;
+                    default:
+                        // mLED_3_On();
+                        ;
 		}//End switch
 	}//End if/else
 
@@ -443,31 +447,32 @@ void ProcessIO(void)
 
 
 
-void EraseFlash(void)
+void EraseFlash2(void)
 {
-	BYTE b = INTCON;
+	BYTE_T b;
+        b._byte = INTCON;
 //Really want this: TBLPTR = ((unsigned short long)ErasePageTracker << 10); but compiler not very efficient at this, so instead do this:
 	TBLPTRL = 0x00;
 	TBLPTRH = ErasePageTracker;
 	TBLPTRU = 0x00;
-	_asm
-	bcf		STATUS, 0, 0
+	#asm
+	bcf	STATUS, 0, 0
 	rlcf	TBLPTRH, 1, 0
 	rlcf	TBLPTRU, 1, 0
 	rlcf	TBLPTRH, 1, 0
 	rlcf	TBLPTRU, 1, 0
-	_endasm 
+	#endasm
 
 	EECON1 = 0b00010100;
 
 	INTCONbits.GIEH = 0;	//Make certain interrupts disabled for unlock process.
-	_asm
+	#asm
 	MOVLW 0x55
 	MOVWF EECON2, 0
 	MOVLW 0xAA
 	MOVWF EECON2, 0
 	BSF EECON1, 1, 0
-	_endasm
+	#endasm
 
 	EECON1bits.WREN = 0;  //Good practice now to clear the WREN bit, as further protection against any future accidental activation of self write/erase operations.
 	INTCONbits.GIEH = b.b7;
@@ -479,31 +484,31 @@ void WriteFlashSubBlock(void)		//Use word writes to write code chunks less than 
 	unsigned char i = 0;
 	BOOL b;
 
-	while(BufferedDataIndex > 0)		//While data is still in the buffer.
+        while(BufferedDataIndex > 0)		//While data is still in the buffer.
 	{
 		TBLPTR = (ProgrammedPointer - BufferedDataIndex);
 		//Below section will need to be modified if the WORDSIZE of your processor is not 2 bytes.
 		TABLAT = ProgrammingBuffer[i];
-		_asm
+		#asm
 		tblwtpostinc
-		_endasm
+		#endasm
 		i++;		
 		TABLAT = ProgrammingBuffer[i];
-		_asm
+		#asm
 		tblwt					//Do not increment TBLPTR on the second write.  See datasheet.
-		_endasm
+		#endasm
 		i++;
 		
 		EECON1 = 0b00100100;	//Word programming mode
 		b = INTCONbits.GIEH;
 		INTCONbits.GIEH = 0;		//Make certain interrupts disabled for unlock process.
-		_asm
+		#asm
 		MOVLW 0x55
 		MOVWF EECON2, 0
 		MOVLW 0xAA
 		MOVWF EECON2, 0
 		BSF EECON1, 1, 0		//Initiates write operation (halts CPU execution until complete)
-		_endasm		
+		#endasm
 
 
 		INTCONbits.GIEH = b;
@@ -526,11 +531,14 @@ void LongDelay(void)
 		while(WREG)
 		{
 			WREG--;
-			_asm
-			bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
-			bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
-			bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
-			_endasm	
+                        Nop(); Nop();
+                        Nop(); Nop();
+                        Nop(); Nop();
+//			#asm
+//			bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
+//			bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
+//			bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
+//			#endasm
 		}
 	}
 	//Delay is ~59.8ms at 48MHz.	

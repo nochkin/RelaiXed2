@@ -4,8 +4,8 @@ This is a modified version of the Microchip bootloader:
 The USB stack is not 'polled' anymore every millisecond as in Microchips example projects.
 Also, the USB stack is shared bwteen the bootloader and the Relaixed development/debug runtime.
 
-This project can be compiled with the free ('Lite') version of Microchips C18 C-compiler,
-together with Microchips' assembler and linker. This is probably best done by installing
-(integrating) the C18 compiler in their MPLAB SDE.
+This project can be now compiled with the free version of Microchips XC8 C-compiler,
+and contains a project setup for Microchips MPLAB-X IDE. This is updated from the previous
+project version that relied on (the free version of) Microchips C18 C-compiler and their MPLAB SDE.
 
 Jos van Eijndhoven

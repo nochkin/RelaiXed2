@@ -125,50 +125,50 @@ typedef union _BDT
 } BDT;                                  //Buffer Descriptor Table
 
 /** E X T E R N S ************************************************************/
-extern byte usb_device_state;
-extern USB_DEVICE_STATUS usb_stat;
+extern volatile byte usb_device_state;
+extern volatile USB_DEVICE_STATUS usb_stat;
 extern byte usb_active_cfg;
 extern byte usb_alt_intf[MAX_NUM_INT];
 
-extern volatile far BDT ep0Bo;          //Endpoint #0 BD Out
-extern volatile far BDT ep0Bi;          //Endpoint #0 BD In
-extern volatile far BDT ep1Bo;          //Endpoint #1 BD Out
-extern volatile far BDT ep1Bi;          //Endpoint #1 BD In
-extern volatile far BDT ep2Bo;          //Endpoint #2 BD Out
-extern volatile far BDT ep2Bi;          //Endpoint #2 BD In
-extern volatile far BDT ep3Bo;          //Endpoint #3 BD Out
-extern volatile far BDT ep3Bi;          //Endpoint #3 BD In
-extern volatile far BDT ep4Bo;          //Endpoint #4 BD Out
-extern volatile far BDT ep4Bi;          //Endpoint #4 BD In
-extern volatile far BDT ep5Bo;          //Endpoint #5 BD Out
-extern volatile far BDT ep5Bi;          //Endpoint #5 BD In
-extern volatile far BDT ep6Bo;          //Endpoint #6 BD Out
-extern volatile far BDT ep6Bi;          //Endpoint #6 BD In
-extern volatile far BDT ep7Bo;          //Endpoint #7 BD Out
-extern volatile far BDT ep7Bi;          //Endpoint #7 BD In
-extern volatile far BDT ep8Bo;          //Endpoint #8 BD Out
-extern volatile far BDT ep8Bi;          //Endpoint #8 BD In
-extern volatile far BDT ep9Bo;          //Endpoint #9 BD Out
-extern volatile far BDT ep9Bi;          //Endpoint #9 BD In
-extern volatile far BDT ep10Bo;         //Endpoint #10 BD Out
-extern volatile far BDT ep10Bi;         //Endpoint #10 BD In
-extern volatile far BDT ep11Bo;         //Endpoint #11 BD Out
-extern volatile far BDT ep11Bi;         //Endpoint #11 BD In
-extern volatile far BDT ep12Bo;         //Endpoint #12 BD Out
-extern volatile far BDT ep12Bi;         //Endpoint #12 BD In
-extern volatile far BDT ep13Bo;         //Endpoint #13 BD Out
-extern volatile far BDT ep13Bi;         //Endpoint #13 BD In
-extern volatile far BDT ep14Bo;         //Endpoint #14 BD Out
-extern volatile far BDT ep14Bi;         //Endpoint #14 BD In
-extern volatile far BDT ep15Bo;         //Endpoint #15 BD Out
-extern volatile far BDT ep15Bi;         //Endpoint #15 BD In
+extern volatile BDT ep0Bo;          //Endpoint #0 BD Out
+extern volatile BDT ep0Bi;          //Endpoint #0 BD In
+extern volatile BDT ep1Bo;          //Endpoint #1 BD Out
+extern volatile BDT ep1Bi;          //Endpoint #1 BD In
+extern volatile BDT ep2Bo;          //Endpoint #2 BD Out
+extern volatile BDT ep2Bi;          //Endpoint #2 BD In
+extern volatile BDT ep3Bo;          //Endpoint #3 BD Out
+extern volatile BDT ep3Bi;          //Endpoint #3 BD In
+extern volatile BDT ep4Bo;          //Endpoint #4 BD Out
+extern volatile BDT ep4Bi;          //Endpoint #4 BD In
+extern volatile BDT ep5Bo;          //Endpoint #5 BD Out
+extern volatile BDT ep5Bi;          //Endpoint #5 BD In
+extern volatile BDT ep6Bo;          //Endpoint #6 BD Out
+extern volatile BDT ep6Bi;          //Endpoint #6 BD In
+extern volatile BDT ep7Bo;          //Endpoint #7 BD Out
+extern volatile BDT ep7Bi;          //Endpoint #7 BD In
+extern volatile BDT ep8Bo;          //Endpoint #8 BD Out
+extern volatile BDT ep8Bi;          //Endpoint #8 BD In
+extern volatile BDT ep9Bo;          //Endpoint #9 BD Out
+extern volatile BDT ep9Bi;          //Endpoint #9 BD In
+extern volatile BDT ep10Bo;         //Endpoint #10 BD Out
+extern volatile BDT ep10Bi;         //Endpoint #10 BD In
+extern volatile BDT ep11Bo;         //Endpoint #11 BD Out
+extern volatile BDT ep11Bi;         //Endpoint #11 BD In
+extern volatile BDT ep12Bo;         //Endpoint #12 BD Out
+extern volatile BDT ep12Bi;         //Endpoint #12 BD In
+extern volatile BDT ep13Bo;         //Endpoint #13 BD Out
+extern volatile BDT ep13Bi;         //Endpoint #13 BD In
+extern volatile BDT ep14Bo;         //Endpoint #14 BD Out
+extern volatile BDT ep14Bi;         //Endpoint #14 BD In
+extern volatile BDT ep15Bo;         //Endpoint #15 BD Out
+extern volatile BDT ep15Bi;         //Endpoint #15 BD In
 
-extern volatile far CTRL_TRF_SETUP SetupPkt;
-extern volatile far CTRL_TRF_DATA CtrlTrfData;
+extern volatile CTRL_TRF_SETUP SetupPkt;
+extern volatile CTRL_TRF_DATA CtrlTrfData;
 
 #if defined(USB_USE_HID)
-extern volatile far unsigned char hid_report_out[HID_INT_OUT_EP_SIZE];
-extern volatile far unsigned char hid_report_in[HID_INT_IN_EP_SIZE];
+extern volatile unsigned char hid_report_out[HID_INT_OUT_EP_SIZE];
+extern volatile unsigned char hid_report_in[HID_INT_IN_EP_SIZE];
 #endif
 
 #endif //USBMMAP_H

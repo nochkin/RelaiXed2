@@ -157,4 +157,5 @@ typedef struct _USB_EP_DSC
     byte bmAttributes;  word wMaxPktSize;   byte bInterval;
 } USB_EP_DSC;
 
+
 #endif //USBDEFS_STD_DSC_H

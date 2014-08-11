@@ -77,9 +77,9 @@ typedef union _CTRL_TRF_SETUP
     {
         unsigned :8;
         unsigned :8;
-        WORD W_Value;
-        WORD W_Index;
-        WORD W_Length;
+        WORD_T W_Value;
+        WORD_T W_Index;
+        WORD_T W_Length;
     };
     struct
     {
@@ -108,7 +108,7 @@ typedef union _CTRL_TRF_SETUP
     {
         unsigned :8;
         unsigned :8;
-        BYTE bDevADR;                   //Device Address 0-127
+        BYTE_T bDevADR;                   //Device Address 0-127
         byte bDevADRH;                  //Must equal zero
         unsigned :8;
         unsigned :8;

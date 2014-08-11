@@ -42,7 +42,6 @@
 #ifdef USB_USE_HID
 
 /** V A R I A B L E S ********************************************************/
-#pragma udata
 byte idle_rate;
 byte active_protocol;               // [0] Boot Protocol [1] Report Protocol
 byte hid_rpt_rx_len;
@@ -52,7 +51,6 @@ void HIDGetReportHandler(void);
 void HIDSetReportHandler(void);
 
 /** D E C L A R A T I O N S **************************************************/
-#pragma code
 
 /** C L A S S  S P E C I F I C  R E Q ****************************************/
 /******************************************************************************
@@ -71,11 +69,12 @@ void HIDSetReportHandler(void);
  *
  * Note:            None
  *****************************************************************************/
+
 void USBCheckHIDRequest(void)
 {
     if(SetupPkt.Recipient != RCPT_INTF) return;
     if(SetupPkt.bIntfID != HID_INTF_ID) return;
-    
+
     /*
      * There are two standard requests that hid.c may support.
      * 1. GET_DSC(DSC_HID,DSC_RPT,DSC_PHY);

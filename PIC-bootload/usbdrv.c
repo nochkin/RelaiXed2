@@ -44,7 +44,6 @@
 #include "io_cfg.h"             // Required for USBCheckBusStatus()
 
 /** V A R I A B L E S ********************************************************/
-#pragma udata
 byte bTRNIFCount;               // Bug fix - Work around.
 
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
@@ -60,7 +59,6 @@ void USBStallHandler(void);
 void USBErrorHandler(void);
 
 /** D E C L A R A T I O N S **************************************************/
-#pragma code
 /******************************************************************************
  * Function:        void USBCheckBusStatus(void)
  *
@@ -737,10 +735,12 @@ TRNIF. If no additional data is preset, TRNIF will remain clear.
 Additional nops were added in this fix to guarantee that TRNIF is
 properly updated before being checked again.
 ********************************************************************/
-		_asm
-		bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
-		bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
-		_endasm		
+        Nop(); Nop();
+        Nop(); Nop();
+//		#asm
+//		bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
+//		bra	0	//Equivalent to bra $+2, which takes half as much code as 2 nop instructions
+//		#endasm
 		Nop();
     }
 
@@ -763,9 +763,10 @@ void ClearArray(byte* startAdr,byte count)
     *startAdr;
     while(count)
     {
-        _asm
-        clrf POSTINC0,0
-        _endasm
+        #asm
+        //clrf POSTINC0,0
+        clrf POSTINC0
+        #endasm
         count--;
     }//end while
 }//end ClearArray

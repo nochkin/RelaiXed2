@@ -154,7 +154,6 @@ project will have to be modified to make the BootPage section larger.
 #endif
 
 /** V A R I A B L E S ********************************************************/
-#pragma udata
 word led_count;
 unsigned int pll_startup_counter;	//Used for software delay while pll is starting up
 
@@ -169,13 +168,16 @@ extern void LongDelay(void);
 
 
 /** D E C L A R A T I O N S **************************************************/
-#pragma code
 void main(void)
-{   
+{
     InitializeSystem();
-    USBTasks(); // check for first USB stuff
-    
-    UIE = 0x3f;          // allow sensible USB interrupts
+    // JvE 20140728: remove this initial USBTasks setup: with XC8 it causes doubling
+    // of the USB code footprint!!
+    //USBTasks(); // check for first USB stuff
+
+    word appWord = *((const word *)(ProgramMemStart));
+    byte appIsErased = appWord == 0xFFFF;
+    //UIE = 0x3f;          // allow sensible USB interrupts
 	PIE2bits.USBIE  = 1; // allow USB interrupts
 #ifdef UseIPEN
 	INTCONbits.GIEL = 1; // allow all low-priority interrupts (among which the USB interrupts)
@@ -184,21 +186,51 @@ void main(void)
 	INTCONbits.GIE = 1;  // Allow all interrupts
 	INTCONbits.PEIE = 1; // including the USB device interrupts
 #endif
+        //if (usb_bus_sense) // USB is connected
+        //    PIR2bits.USBIF = 1; // enforce a first interrupt, initializing the USB subsystem
 
-	if (usb_device_state >= 1 && !PORTAbits.RA5)
+        // TODO: extend the following if() with a setjmp() call to support re-programming
+        //       sfter the application has started (after going to ProgramMemStart).
+        //       See the Boot46J50Family.c around line 252 for the place to repair.
+        //       Unfortunately, I dont know if we can longjmp() from within an ISR...
+        //       Maybe, alternatively, use a RESET to come back here.
+        //       Can we keep our USB connection alive across a RESET?
+	if (!PORTAbits.RA5 // user-forced into programmer mode
+           || appIsErased  // erased: there is no application present beyond the bootloader
+           || usb_bus_sense) // USB connected during power-up
 	{
 		// Fail-safe start-up mode: USB connected && channel-button pressed on power-up
 		// Only needed if uploaded app is corrupt (e.g. erased)
-		mLED_1_On();
-		while(usb_device_state >= 1)
-			; // stay here until reset or not USB-connected		
-	}
-
-	// Normal mode: with USB connection or not, goto Relaixed app
-	_asm
-		goto ProgramMemStart			// Assume the user app has its own main loop.
-	_endasm
-	// we will never return here
+		//mLED_1_On();
+		while(1) {
+                    // stay here until reset, and handle USB interrupts
+                    // show P on display to indicate programming mode
+                        mLED_1_On();
+                        mLED_3_Off();
+                        mLED_4_Off();
+                    if (usb_bus_sense) {
+                        mLED_2_On();
+                        mLED_5_On();
+                        mLED_6_On();
+                        mLED_7_On();
+                    } else {
+                        mLED_2_Off();
+                        mLED_5_Off();
+                        mLED_6_Off();
+                        mLED_7_Off();
+                    }
+                    PIE2bits.USBIE = 1;
+                    PIR2bits.USBIF = 1;
+                    //LongDelay(); hmm.. this delay causes a failing USB attach to host
+                }
+	} else
+        {
+	// Normal mode: goto Relaixed app
+            #asm
+		goto ProgramMemStart	// Assume the user app has its own main loop.
+            #endasm
+        }
+	// we will never come here, except to go into reset
 }//end main
 
 
