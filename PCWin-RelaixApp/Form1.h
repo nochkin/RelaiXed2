@@ -2948,7 +2948,7 @@ namespace HIDBootLoader {
 
 			unsigned char i;
 			bool hexFileError;
-			unsigned long extendedAddress;
+			unsigned long extendedAddress = 0L; // JvE 20140810: repaired bug: added initialize with 0.
 			bool hexFileEOF;
 
 			DisableButtons();
