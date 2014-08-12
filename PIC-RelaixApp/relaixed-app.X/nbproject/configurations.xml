@@ -180,7 +180,7 @@
           </linkerLibItems>
         </linkerTool>
         <loading>
-          <loadableFile>HID Bootloader PIC18F46J50 Family.hex</loadableFile>
+          <loadableFile>PIC-bootload.production.hex</loadableFile>
           <useAlternateLoadableFile>false</useAlternateLoadableFile>
           <parseOnProdLoad>false</parseOnProdLoad>
           <alternateLoadableFile></alternateLoadableFile>
