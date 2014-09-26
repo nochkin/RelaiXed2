@@ -62,6 +62,9 @@
 #define SelectA  PORTAbits.RA3
 #define SelectB  PORTAbits.RA5
 
+#define I2C_SDA  PORTBbits.RB5
+#define I2C_SCL  PORTBbits.RB4
+
 #define HasUSB   PORTCbits.RC6
 //#define LEDright PORTCbits.RC7
 #define LEDright TRISCbits.TRISC7

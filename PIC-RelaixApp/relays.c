@@ -48,23 +48,29 @@ typedef union _WORD {
 
 // BoardId on I2C bus, as addr bits in I2C. values are ((0..7)<<1);
 static uint8_t relayBoardId   = 0;
-uint8_t relayBoardType = 0;
+uint8_t relayBoardType = RELAIXED_XLR;
 
 // Local version, adapted from the provided one in C18/pmc_common library
 
-static unsigned char writeI2C(unsigned char data_out) {
+unsigned char myWriteI2C(unsigned char data_out) {
     SSP1BUF = data_out; // write single uint8_t to SSPBUF
     if (SSP1CON1bits.WCOL) // test if write collision occurred
+    {
+        SelectA = 0;
         return ( -1); // if WCOL bit is set return negative #
-    else if (((SSP1CON1 & 0x0F) == 0x08) || ((SSP1CON1 & 0x0F) == 0x0B)) //master mode only
+    }
+    //else if (((SSP1CON1 & 0x0F) == 0x08) || ((SSP1CON1 & 0x0F) == 0x0B)) //master mode only
     {
         while (SSP1STATbits.BF); // wait until write cycle is complete
-        IdleI2C(); // ensure module is idle
+        IdleI2C(); // wait for bus idle before continuing
         if (SSP1CON2bits.ACKSTAT) // test for ACK condition received
+        {
+            SelectA = 0;
             return ( -2); // return NACK
+        }
         else return ( 0); //return ACK
     }
-    return -2;
+    //return -2;
 }
 
 // Configure mode and initial conditions in the
@@ -77,21 +83,23 @@ char relay_boards_init(void) {
     // Check for relay board type, try twice..
     for (i=0; i<2; i++) {
         StartI2C();
-        err = writeI2C(0x40); // address MCP23017 on board with addr/id 0
+        err = myWriteI2C(0x40); // address MCP23017 on board with addr/id 0
         StopI2C();
+        SelectA = 1;
         if (!err) {
             relayBoardType = RELAIXED_XLR;
             relayBoardId = 0;
             break;
         }
         StartI2C();
-        err = writeI2C(0x48); // address MCP23017 on board with A2==1
+        err = myWriteI2C(0x48); // address MCP23017 on board with A2==1
         StopI2C();
+        SelectA = 1;
         if (!err) {
             relayBoardType = RELAIXED_SE;
             relayBoardId = 8;
             break;
-            }
+        }
     }
     if (err) {
         usb_write(i2c_msg, (uint8_t) 9);
@@ -106,20 +114,21 @@ char relay_boards_init(void) {
         portA_init = 0xff; // unbuffered drive to relays, low active
 
     StartI2C();
-    writeI2C(0x40 | relayBoardId) || // address MCP23017
-    writeI2C(0x12) || // addr of GPIOA register
-    writeI2C(portA_init) || // to GPA[0..7]
-    writeI2C(0); // to GPB[0..7]
+    myWriteI2C(0x40 | relayBoardId) || // address MCP23017
+    myWriteI2C(0x12) || // addr of GPIOA register
+    myWriteI2C(portA_init) || // to GPA[0..7]
+    myWriteI2C(0); // to GPB[0..7]
     StopI2C();
 
     // Set both port A and B as all-output
     StartI2C();
-    writeI2C(0x40 | relayBoardId) || // address MCP23017 on board with addr/id 0
-    writeI2C(0x00) || // select on-chip register addr 0;
-    writeI2C(0x00) || // IODIRA = 0 (all output)
-    writeI2C(0x00); // IODIRB = 0 (all output)
+    myWriteI2C(0x40 | relayBoardId) || // address MCP23017 on board with addr/id 0
+    myWriteI2C(0x00) || // select on-chip register addr 0;
+    myWriteI2C(0x00) || // IODIRA = 0 (all output)
+    myWriteI2C(0x00); // IODIRB = 0 (all output)
     StopI2C();
 
+    SelectA = 1;
     byte2hex(i2c_msg + 6, relayBoardId);
     usb_write(i2c_msg, (uint8_t) 8);
     return 0;
@@ -127,11 +136,12 @@ char relay_boards_init(void) {
 
 void mcp23017_output(uint8_t chip_addr, WORD data) {
     StartI2C();
-    writeI2C(chip_addr);
-    writeI2C(0x12); // addr of GPIOA register
-    writeI2C(WORD_MSB(data)); // to GPA[0..7]
-    writeI2C(WORD_LSB(data)); // to GPB[0..7]
+    myWriteI2C(chip_addr);
+    myWriteI2C(0x12); // addr of GPIOA register
+    myWriteI2C(WORD_MSB(data)); // to GPA[0..7]
+    myWriteI2C(WORD_LSB(data)); // to GPB[0..7]
     StopI2C();
+    SelectA = 1;
 }
 
 void set_relays(uint8_t power, uint8_t channel, uint8_t vol_l, uint8_t vol_r) {

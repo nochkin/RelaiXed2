@@ -12,6 +12,7 @@
       <itemPath>../storage.h</itemPath>
       <itemPath>../ir_receiver.h</itemPath>
       <itemPath>../dac_cntl.h</itemPath>
+      <itemPath>../display_oled.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LibraryFiles"
                    displayName="Library Files"
@@ -37,6 +38,7 @@
       <itemPath>../storage.c</itemPath>
       <itemPath>../ir_receiver.c</itemPath>
       <itemPath>../dac_cntl.c</itemPath>
+      <itemPath>../display_oled.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -180,7 +182,7 @@
           </linkerLibItems>
         </linkerTool>
         <loading>
-          <loadableFile>PIC-bootload.production.hex</loadableFile>
+          <loadableFile>HID Bootloader PIC18F46J50 Family.hex</loadableFile>
           <useAlternateLoadableFile>false</useAlternateLoadableFile>
           <parseOnProdLoad>false</parseOnProdLoad>
           <alternateLoadableFile></alternateLoadableFile>
