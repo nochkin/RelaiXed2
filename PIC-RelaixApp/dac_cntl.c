@@ -21,12 +21,13 @@
  * Control the DAC input selection together with the relaixed inputs.
  * Read-back DAC lock info (spdif presence) to show in the display.
  ********************************************************************/
-#include <i2c.h>
+#include <plib/i2c.h>
 #include <stdio.h>
 #include "amp_state.h"
 #include "display.h"
 #include "usb_io.h"
 #include "dac_cntl.h"
+#include "io_cfg.h"
 
 static byte dac_state = DAC_ABSENT;
 
@@ -40,13 +41,19 @@ static unsigned char writeI2C( unsigned char data_out )
 {
     SSP1BUF = data_out;           // write single byte to SSPBUF
     if ( SSP1CON1bits.WCOL )      // test if write collision occurred
+    {
+        SelectA = 0;
         return -1;              // if WCOL bit is set return negative #
+    }
     else if( ((SSP1CON1&0x0F)==0x08) || ((SSP1CON1&0x0F)==0x0B) )	//master mode only
     {
         while( SSP1STATbits.BF );   // wait until write cycle is complete
 	    IdleI2C();                 // ensure module is idle
 	    if ( SSP1CON2bits.ACKSTAT ) // test for ACK condition received
+            {
+                SelectA = 0;
                 return  -2;			// return NACK
+            }
             else return  0;              //return ACK
     }
     return -2;
@@ -70,6 +77,8 @@ static char dac_send(byte regaddr, byte data)
 	      writeI2C(regaddr) || // addr of mcp23008 register
 	      writeI2C(data);      // into selected reg
 	StopI2C();
+        SelectA = 1;
+
 
     return err;
 }
@@ -83,6 +92,7 @@ static char dac_receive( void)
   writeI2C(chip_addr);
   data = readI2C();
   StopI2C();
+  SelectA = 1;
 
   return data;
 }

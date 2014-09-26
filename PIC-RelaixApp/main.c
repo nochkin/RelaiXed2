@@ -61,6 +61,7 @@
 #include <plib/i2c.h>
 #include "io_cfg.h"
 #include "display.h"
+#include "display_oled.h"
 #include "usb_io.h"
 #include "storage.h"
 #include "amp_state.h"
@@ -111,14 +112,22 @@ void main(void) {
     ir_tick = 0;
     ir_speedup = 20;
     dac_lock_tick = 0;
+
     display_set_alt(0x00, 0x00, 0x00);
     display_set(0x00, 0x00, 1);
     ir_receiver_init();
+
+
     err = relay_boards_init(); // as side-effect: determine board Type and Id
     amp_state_init();
     set_relays(0x00, 0x00, 0x00, 0x00);
 
-    if (err)
+    display_oled_init();
+    if (has_oled_display) {
+        display_oled_chars( 0, 0, 5, "hello");
+        display_set_alt(DIGIT_D, 0x00, 3);
+    }
+    else if (err)
         display_set_alt(DIGIT_E, 0x01, 3);
 
     // Globally enable interrupts
@@ -145,6 +154,8 @@ void main(void) {
     // wait some time for stabilization before enabling all other interrupts
     while (power_tick > 0)
         ; // gets decreased on timer interrupts, 183Hz
+
+    
 
     // power==0 now, from amp_state_init().
     // incr power now quickly to 1, and later to 2.
@@ -235,7 +246,9 @@ void check_usb_power(char err) {
         prev_usb_bus_sense = HasUSB;
         if (!err) // don't conceal earlier error on display
             display_set_alt(DIGIT_U, (HasUSB ? 1 : 0), 2);
+#ifdef HAS_BOOTLOADER
         PIR2bits.USBIF = 1; // enter USB code through interrupt
+#endif
     }
 }
 
@@ -395,18 +408,22 @@ static void init(void) {
     IPR2 = 0;
     IPR3 = 0;
 
-    //#ifdef NO_BOOTLOADER
-    PIR2bits.USBIF = 0;
-    //#else
-    // hmm... enabling the USBIE seems missing inside the bootloader.
+    #ifdef HAS_BOOTLOADER
     PIE2bits.USBIE = 1; // allow USB interrupts
-    //#endif
+    #else
+    // explicitly disable USB, just to be sure
+    PIE2bits.USBIE = 0;
+    PIR2bits.USBIF = 0;
+    UCON = 0;
+    #endif
 
     OSCTUNE = 0x40; // enable the 96MHz PLL to create the 48MHz system clock
 
     // PORTA: all inputs, no interrupt-on-change facility :-(...
-    PORTA = 0;
-    TRISA = 0xFF; // A all inputs
+    //PORTA = 0;
+    PORTA = 0x08; // use RA3 for diagnostic output, active low
+    //TRISA = 0xFF; // A all inputs
+    TRISA = 0xF7; // make RA3 (selectA) output for diagnostic purpose
     ADCON0 = 0;
     ANCON0 = 0xFF;
     ANCON1 = 0x1F; // disable AD converter, all digital IO
@@ -416,8 +433,13 @@ static void init(void) {
 
     // PORTB: use all-input config, use open-drain output style
     // The I2C pins must also be configured in input mode.
+    // There is an Errata for several PIC18F devices, saying
+    // that a more extensive reset is needed for I2C operation :-(
+    // TRISB = 0xCF; // 1. first make I2C SDA and SCL as output
+    TRISB = 0xFF; // 2. now make all pins inputs
     PORTB = 0;
-    TRISB = 0xFF; // B all inputs
+    LATB = 0;
+    TRISB = 0xFF; // 2. now make all pins inputs
     INTCON2bits.RBPU = 0; // use weak pull-up for RB67
 
     // PORTC: all input
@@ -437,10 +459,6 @@ static void init(void) {
     EECON2 = 0x55;
     EECON2 = 0xAA;
     PPSCONbits.IOLOCK = 1;
-
-    // setup I2C peripheral
-    SSP1CON1 = 0x28; // enable I2C master mode
-    SSP1ADD = 0x63; // 100kHz bitrate from 40MHz system clock
 
     // Timer0 OK for use, 8-bit prescale, 8- or 16-bit counter, sets TMR0IF
     // Timer1: enabling it locks pins RC0 and RC1 to a special-function input, cannot do that.
@@ -477,14 +495,13 @@ static void init(void) {
 
     // I2C master to drive relay board(s)
     // adapted from OpenI2C in C18/pmc_common library
+    SSP1ADD = 0x63; // 100kHz bitrate from 40MHz system clock
     SSP1STAT &= 0x3F; // power on state
     SSP1CON1 = 0x00; // power on state
     SSP1CON2 = 0x00; // power on state
     SSP1CON1 |= MASTER; // select serial mode
     SSP1STAT |= 0; // slew rate on/off
-
-    //TRISBbits.TRISB5 = 1;         // SDA is input
-    //TRISBbits.TRISB4 = 1;			// SCL is input
+    PIR2bits.BCLIF = 0; // reset any interrupt state from bus collision
     SSP1CON1bits.SSPEN = 1; // enable synchronous serial port
 
     // Set-up HVLD module: mute audio when power-supply unexpectedly drops

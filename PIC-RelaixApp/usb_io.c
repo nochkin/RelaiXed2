@@ -170,7 +170,7 @@ persistent BDT ep1Bi @ 0x40C;
  *****************************************************************************/
 #define mHIDTxIsBusy()              HID_BD_IN.Stat.UOWN
 
-
+#ifdef HAS_BOOTLOADER
 /******************************************************************************
  * Function:        void HIDTxReport(char *buffer, byte len)
  *
@@ -294,6 +294,7 @@ static byte HIDRxReport(char *buffer, byte len)
     return hid_rpt_rx_len;
     
 }//end HIDRxReport
+#endif
 
 /******************************************************************************
  * Finally my own read/write functions....
@@ -319,8 +320,8 @@ byte usb_state(void)
 
 byte usb_read(char *buffer, byte len)
 {
+#ifdef HAS_BOOTLOADER
 	unsigned short i;
-	
 	if (!UCONbits.USBEN)
 		return 0;
 	
@@ -329,12 +330,15 @@ byte usb_read(char *buffer, byte len)
 		// Why !!$#$#!# did Microchip not support USB pingpong buffers in their firmware?
 		
     return HIDRxReport(buffer, len);
+#else
+    return 0;
+#endif
 }
 
 void usb_write( const char *buffer, byte len)
 {
+#ifdef HAS_BOOTLOADER
 	unsigned short i;
-	
 	if (!UCONbits.USBEN || !mGetLogMode)
 		return;
 
@@ -344,6 +348,9 @@ void usb_write( const char *buffer, byte len)
 	
 	if(!mHIDTxIsBusy())
  		HIDTxReport_log(buffer, len);
+#else
+        return;
+#endif
 }
 
 // Configure the standard C18 stdio library to print to USB as stdout

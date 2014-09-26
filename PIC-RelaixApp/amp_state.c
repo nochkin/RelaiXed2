@@ -29,6 +29,7 @@
 #include "relays.h"
 #include "storage.h"
 #include "dac_cntl.h"
+#include "display_oled.h"
 
 volatile int8_t volume_incr; // modified from isr
 static int8_t volume_incr_carry;
@@ -148,6 +149,9 @@ void volume_display(uint8_t override) {
     vol_mod_10 = master_volume - vol_by_10 + 10;
 
     display_set(vol_div_10, vol_mod_10, override);
+
+    if (has_oled_display)
+        display_oled_volume(vol_div_10, vol_mod_10);
 }
 
 void volume_update(void) {
@@ -161,6 +165,9 @@ void volume_update(void) {
     if (muted) {
         muted = 0;
         volume_incr = 0; // first unmute before changing volume setting
+
+        if (has_oled_display)
+            display_oled_unmute();
     }
 
     volume_incr_carry += volume_incr;
@@ -238,6 +245,9 @@ void mute(void) {
     muted = 1;
     set_relays(power, 0x00, 0x00, 0x00);
     display_set(0x00, 0x00, 1);
+
+    if (has_oled_display)
+        display_oled_mute();
 }
 
 void unmute(void) {
@@ -246,6 +256,9 @@ void unmute(void) {
 
     volume_incr = 0;
     volume_update();
+
+    if (has_oled_display)
+        display_oled_unmute();
 }
 
 void channel_update(void) {
@@ -315,6 +328,9 @@ void channel_update(void) {
     set_volume_balance_relays();
     volume_display(0);
     display_set_alt(DIGIT_C, channel, 2); // repeat channel-display twice
+
+    if (has_oled_display)
+        display_oled_channel(channel);
 }
 
 // channel_set with absolute channel number as argument, called from ir_receiver only
@@ -340,6 +356,9 @@ void power_update(void) {
         // first do audio mute...
         set_relays(power, 0x00, 0x00, 0x00);
         display_set(DIGIT_dark, DIGIT_dark, 1);
+        if (has_oled_display)
+            display_oled_sleep();
+
         // and follow immediatly with analog power shutdown
 
         // set volume-state down AFTER power-state down,
@@ -351,6 +370,11 @@ void power_update(void) {
     } else if (power_incr > 0 && power == 0) {
         power = 1;
         display_set(0x00, 0x00, 1);
+        if (has_oled_display) {
+            display_oled_chars(0,0,6,"get up");
+            display_oled_chars(1,15,1," ");
+        }
+
         set_relays(power, 0x00, 0x00, 0x00);
         // Enable analog power, stay in mute
         // Later, from the 'power_tick' counter, power will be incremented to 2
