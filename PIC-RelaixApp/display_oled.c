@@ -249,8 +249,12 @@ static void oled_setup() {
     uint8_t arg;
 
     oled_sendcommand(0x2A); // **** Set "RE"=1	00101010B
-    oled_sendcommand(0x71);
-    oled_sendcommand(0x5C); // JvE: needs repair, byte after 0x71 should be data mode!
+
+    //oled_sendcommand(0x71);
+    //oled_sendcommand(0x5C); // JvE: needs repair, byte after 0x71 should be data mode!
+    arg = 0x5c;
+    oled_cmd_data(0x71, 1, &arg); // Enable internal Vdd regulator
+
     oled_sendcommand(0x28);
 
     oled_sendcommand(0x08); // **** Set Sleep Mode On
