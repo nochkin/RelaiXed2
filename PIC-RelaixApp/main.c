@@ -147,7 +147,7 @@ void main(void) {
 #ifdef __DEBUG
     power_tick = 0;
 #else
-    power_tick = 150;
+    power_tick = 120;
 #endif
 
     // Set a timer to later undo the mute and activate last volume setting.
@@ -190,7 +190,8 @@ void main(void) {
                 flash_volume_channel();
             } else if (power_incr > 0 && power_state() == 0) {
                 // if we move power_state from 0 to 1, we surely want to go later to 2
-                power_tick = (isRelaixedXLR) ? 500 : 900;
+                // For RelaixedPassive: wait somewhat longer for its soft-switch main power
+                power_tick = (isRelaixedXLR) ? 500 : 700;
             }
 
             if (power_incr > 0)
@@ -496,11 +497,11 @@ static void init(void) {
     // I2C master to drive relay board(s)
     // adapted from OpenI2C in C18/pmc_common library
     SSP1ADD = 0x63; // 100kHz bitrate from 40MHz system clock
-    SSP1STAT &= 0x3F; // power on state
+    //SSP1STAT &= 0x3F; // power on state
+    SSP1STAT = 0x00; // enable slew rate control, std I2C signal levels (no SMBus)
     SSP1CON1 = 0x00; // power on state
     SSP1CON2 = 0x00; // power on state
-    SSP1CON1 |= MASTER; // select serial mode
-    SSP1STAT |= 0; // slew rate on/off
+    SSP1CON1 |= MASTER; // select serial master mode
     PIR2bits.BCLIF = 0; // reset any interrupt state from bus collision
     SSP1CON1bits.SSPEN = 1; // enable synchronous serial port
 

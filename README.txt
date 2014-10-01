@@ -1,5 +1,5 @@
 The RelaiXed project source code consists of three parts that are largely independent,
-and are compiled and linked seperately:
+and are compiled and linked separately:
 1) The ‘RelaixedApp.hex’  embedded software (‘firmware’), stored internally in the PIC microcontroller
    controls the RelaiXed operation. It is stored in the PIC flash memory at addresses above 2000(hex).
    This software is all newly written for this Relaixed2 design.
@@ -22,6 +22,12 @@ https://relaixed2.svn.sourceforge.net/svnroot/relaixed2
 
 Revision History of (1) RelaiXedApp:
 ====================================
+RelaixedApp-20141001, svn rev. 77:
+----------------------------------
+ - Added support for a 16x2 character OLED display attached to the I2C bus.
+   (for now, mostly tested with the RelaixedPassive board.
+    There are still some issues with bus reliability at the electrical level...)
+
 RelaixedApp-20140811, svn rev. 73:
 ----------------------------------
  - Update the project configuration and all source files to use (the free version of)
