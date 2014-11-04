@@ -94,7 +94,7 @@ static void set_volume_balance_relays(void) {
 
     if (master_volume == 0 || channel == 0 || power == 0 || muted != 0) {
         // Don't let balance-computations result in non-zero volume
-        set_relays(power, analog_channel, 0x00, 0x00);
+        set_relays(power, 0x00, 0x00, 0x00);
         return;
     }
 
