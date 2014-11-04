@@ -22,6 +22,10 @@ https://relaixed2.svn.sourceforge.net/svnroot/relaixed2
 
 Revision History of (1) RelaiXedApp:
 ====================================
+RelaixedApp-20141104, svn rev. 78:
+----------------------------------
+ - Bug repair: at volume 00 the input relays must detach for real silence (bug was present since svn 68)
+
 RelaixedApp-20141001, svn rev. 77:
 ----------------------------------
  - Added support for a 16x2 character OLED display attached to the I2C bus.
