@@ -334,9 +334,9 @@ void channel_update(void) {
 }
 
 // channel_set with absolute channel number as argument, called from ir_receiver only
-
+// channel aregument is >= 1
 void channel_set(uint8_t new_ch) {
-    if (dac_status() == DAC_ABSENT && new_ch > 6)
+    if (new_ch > n_channels)
         return; // silently ignore unsupported button
 
     channel_incr = new_ch - channel;

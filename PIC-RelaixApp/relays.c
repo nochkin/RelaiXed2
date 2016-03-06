@@ -175,7 +175,8 @@ void set_relays(uint8_t power, uint8_t channel, uint8_t vol_l, uint8_t vol_r) {
         if (power > 1) // full power on, major power relay
             WORD_LSB(i2c_data) |= 0x40;
         tmpA = 0xff; // portA is low-active!
-        if (power > 0 && channel > 0 && channel <= 4)
+        if (power > 0 && channel > 0 && channel <= 6)
+            // Note: default use for 2 aux pins is for channel extension
             tmpA = ~(1 << (channel-1)); // decoded channel, active low
         if (power > 0)
             tmpA &= 0x3F; // double line to soft-power-relay, active low
