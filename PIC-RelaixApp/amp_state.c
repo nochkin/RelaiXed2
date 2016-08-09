@@ -98,7 +98,11 @@ static void set_volume_balance_relays(void) {
         return;
     }
 
-    if (isRelaixedXLR) {
+    if (isRelaixedSE) {
+		// the relaixedSE (without extra slave boards) does not implement balance control
+        volume_right = (int8_t) master_volume;
+        volume_left = (int8_t) master_volume;
+	} else {
         balance_right = master_balance >> 1;
         balance_left = balance_right - master_balance;
         volume_right = (int8_t) master_volume + balance_right;
@@ -108,10 +112,6 @@ static void set_volume_balance_relays(void) {
         if (volume_left > 64) volume_left = 64;
         if (volume_right < 0) volume_right = 0;
         if (volume_left < 0) volume_left = 0;
-    } else {
-         // the relaixedSE does not implement balance control
-        volume_right = (int8_t) master_volume;
-        volume_left = (int8_t) master_volume;
     }
 
 	// volume relays have minimum volume (max attenuation) when driven all-0,

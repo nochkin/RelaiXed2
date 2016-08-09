@@ -33,6 +33,7 @@
 #include "io_cfg.h"
 #include "usb_io.h"
 #include "amp_state.h"
+#include "relays.h"
 
 //#define OLED_addr 0x3c
 #define OLED_addr 0x78
@@ -49,8 +50,6 @@ static void oled_sendData(uint8_t data);
 static void oled_cursor(uint8_t col, uint8_t row);
 static void createChar(uint8_t location, const uint8_t charmap[]);
 static void oled_cmd_data( uint8_t cmd, uint8_t n, const uint8_t data[]);
-
-extern unsigned char myWriteI2C(unsigned char data_out);
 
 // Glyphs used to build big chars:
 // Each of these 8 glyphs will be stored in the display as custom char
@@ -109,10 +108,7 @@ uint8_t display_oled_init(void)
     
     // Check for OLED display, try twice..
     for (j=0; j<2; j++) {
-        StartI2C();
-        err = myWriteI2C(OLED_addr);
-        StopI2C();
-        SelectA = 1;
+        err = i2c_probe(OLED_addr);
 
         for (i=0; i<50; i++)
             ;
@@ -153,7 +149,6 @@ void display_oled_string(uint8_t row, uint8_t col, const char *string)
         myWriteI2C(c);
 
     StopI2C();
-    SelectA = 1;
     for (i=0; i<50; i++)
         ;
 }
@@ -173,7 +168,6 @@ static void oled_cmd_data(uint8_t cmd, uint8_t n, const uint8_t *data) {
             myWriteI2C(data[i]);
     }
     StopI2C();
-    SelectA = 1;
     for (i=0; i<50; i++)
         ;
 }

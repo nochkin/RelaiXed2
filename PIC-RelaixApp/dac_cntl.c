@@ -28,6 +28,7 @@
 #include "usb_io.h"
 #include "dac_cntl.h"
 #include "io_cfg.h"
+#include "relays.h"
 
 static byte dac_state = DAC_ABSENT;
 
@@ -36,66 +37,9 @@ byte dac_status( void)
   return dac_state;
 }
 
-// Local version, adapted from the provided one in C18/pmc_common/i2c/i2c1writ.c
-static unsigned char writeI2C( unsigned char data_out )
-{
-    SSP1BUF = data_out;           // write single byte to SSPBUF
-    if ( SSP1CON1bits.WCOL )      // test if write collision occurred
-    {
-        SelectA = 0;
-        return -1;              // if WCOL bit is set return negative #
-    }
-    else if( ((SSP1CON1&0x0F)==0x08) || ((SSP1CON1&0x0F)==0x0B) )	//master mode only
-    {
-        while( SSP1STATbits.BF );   // wait until write cycle is complete
-	    IdleI2C();                 // ensure module is idle
-	    if ( SSP1CON2bits.ACKSTAT ) // test for ACK condition received
-            {
-                SelectA = 0;
-                return  -2;			// return NACK
-            }
-            else return  0;              //return ACK
-    }
-    return -2;
-}
-
-static unsigned char readI2C( void )
-{
-  if( ((SSP1CON1&0x0F)==0x08) || ((SSP1CON1&0x0F)==0x0B) )	//master mode only
-    SSP1CON2bits.RCEN = 1;           // enable master for 1 byte reception
-  while ( !SSP1STATbits.BF );      // wait until byte received  
-  return ( SSP1BUF );              // return with read byte 
-}
-
-static char dac_send(byte regaddr, byte data)
-{
-	char err;
-    char chip_addr = 0x4e; // lsb is 0 for write
-
-	StartI2C();
-	err = writeI2C(chip_addr) || // opcode
-	      writeI2C(regaddr) || // addr of mcp23008 register
-	      writeI2C(data);      // into selected reg
-	StopI2C();
-        SelectA = 1;
-
-
-    return err;
-}
-
-static char dac_receive( void)
-{
-  char data;
-  char chip_addr = 0x4f; // lsb is 1 for read
-
-  StartI2C();
-  writeI2C(chip_addr);
-  data = readI2C();
-  StopI2C();
-  SelectA = 1;
-
-  return data;
-}
+#define dac_chip_addr 0x4e
+#define dac_send(reg,data) i2c_write1(dac_chip_addr,reg,data)
+#define dac_receive() i2c_read(dac_chip_addr,0x09)
 
 /* Is a DAC connected to the Relaixed i2c bus? */
 /* on OK, we end with setting reg-addr to GPIO */
