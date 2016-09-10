@@ -22,7 +22,11 @@ https://relaixed2.svn.sourceforge.net/svnroot/relaixed2
 
 Revision History of (1) RelaiXedApp:
 ====================================
-RelaixedApp-20160306, svn rev. 82:
+RelaixedApp-20161010, svn rev. 83:
+----------------------------------
+ - Completed software-support for a 16x2 OLED display on the I2C bus, works for the RelaiXedPassive.
+
+RelaixedApp-20160809, svn rev. 82:
 ----------------------------------
  - Support 2 or 3 relay-boards on the RelaixedPassive, providing left-right balance control
    between the boards at i2c bus-address 0 and 1. A further board at 2 is not influenced by balance.

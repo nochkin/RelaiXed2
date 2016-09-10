@@ -124,7 +124,6 @@ void main(void) {
 
     display_oled_init();
     if (has_oled_display) {
-        display_oled_chars( 0, 0, 5, "hello");
         display_set_alt(DIGIT_D, 0x00, 3);
     }
     else if (err)

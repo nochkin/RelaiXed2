@@ -99,7 +99,7 @@ static void set_volume_balance_relays(void) {
     }
 
     if (isRelaixedSE) {
-		// the relaixedSE (without extra slave boards) does not implement balance control
+	// the relaixedSE (without extra slave boards) does not implement balance control
         volume_right = (int8_t) master_volume;
         volume_left = (int8_t) master_volume;
 	} else {
@@ -236,6 +236,9 @@ void balance_update(void) {
     } else {
         display_set_alt(DIGIT_minus, -master_balance, 2);
     }
+
+    if (has_oled_display)
+        display_oled_balance(master_balance);
 }
 
 void mute(void) {
@@ -356,23 +359,20 @@ void power_update(void) {
         // first do audio mute...
         set_relays(power, 0x00, 0x00, 0x00);
         display_set(DIGIT_dark, DIGIT_dark, 1);
-        if (has_oled_display)
-            display_oled_sleep();
-
         // and follow immediatly with analog power shutdown
-
         // set volume-state down AFTER power-state down,
         // otherwise an interrupt-flash-tick might store a (wrong) 0 volume to flash
         power = 0;
         master_volume = 0;
         volume_incr_carry = 0;
         set_relays(0x00, 0x00, 0x00, 0x00);
+        if (has_oled_display)
+            display_oled_power(power);
     } else if (power_incr > 0 && power == 0) {
         power = 1;
         display_set(0x00, 0x00, 1);
         if (has_oled_display) {
-            display_oled_chars(0,0,6,"get up");
-            display_oled_chars(1,15,1," ");
+            display_oled_power(power);
         }
 
         set_relays(power, 0x00, 0x00, 0x00);
@@ -385,6 +385,10 @@ void power_update(void) {
         channel_incr = 0;
         balance_incr = 0;
         muted = 0;
+        if (has_oled_display) {
+            display_oled_power(power);
+            display_oled_balance(master_balance);
+        }
         volume_update(); // shows volume in display
         channel_update(); // shows channel in temporary display
 
