@@ -22,7 +22,7 @@ https://relaixed2.svn.sourceforge.net/svnroot/relaixed2
 
 Revision History of (1) RelaiXedApp:
 ====================================
-RelaixedApp-20161010, svn rev. 83:
+RelaixedApp-20160913, svn rev. 84:
 ----------------------------------
  - Completed software-support for a 16x2 OLED display on the I2C bus, works for the RelaiXedPassive.
 
