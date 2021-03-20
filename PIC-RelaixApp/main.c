@@ -121,14 +121,10 @@ void main(void) {
     err = relay_boards_init(); // as side-effect: determine board Type and Id
     amp_state_init();
     set_relays(0x00, 0x00, 0x00, 0x00);
-
     display_oled_init();
-    if (has_oled_display) {
-        display_oled_chars( 0, 0, 5, "hello");
-        display_set_alt(DIGIT_D, 0x00, 3);
-    }
-    else if (err)
-        display_set_alt(DIGIT_E, 0x01, 3);
+
+    if (err)
+        display_set_alt(DIGIT_E, 0x01, 4);
 
     // Globally enable interrupts
 #ifdef UseIPEN
@@ -155,8 +151,6 @@ void main(void) {
     while (power_tick > 0)
         ; // gets decreased on timer interrupts, 183Hz
 
-    
-
     // power==0 now, from amp_state_init().
     // incr power now quickly to 1, and later to 2.
     power_incr = 1;
@@ -171,6 +165,11 @@ void main(void) {
     // Check if a DAC is present in this Relaixed, if so initialize.
     // This check was delayed to allow DAC power-up, otherwise its i2c interface stays in reset
     dac_init();
+
+    // Also, check again for the OLED display: it seems to take a while after power-up
+    // for it to become responsive
+    if (!has_oled_display)
+        display_oled_init();
 
     while (1) {
         if (volume_incr)

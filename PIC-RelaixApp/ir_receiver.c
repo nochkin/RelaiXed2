@@ -141,9 +141,10 @@ char ir_tmr_isr(void)
 //   bal.l bal.r : 0x1b 0x1a
 //   mute  audio : 0x0d 0xcb
 //    stop  play : 0x36 0x35
-//   pause power : 0x30 0x0c
+//pause pwrToggle: 0x30 0x0c
 //    left right : 0x55 0x56 // RC5X
 //       down up : 0x51 0x50 // RC5X
+// standby pwrOn : 0x3d 0x3f
 
 static char rc_got_half_period;
 static char rc_toggle;
@@ -187,8 +188,9 @@ static void rc5_receive(uint8_t delay)
 //      down, up : 0x59 0x58  (vol-, vol+)
 //   pause audio : 0x30 0x4e
 //    stop  play : 0x31 0x2c
-//         power : 0x0c
+//   powertoggle : 0x0c
 //       menu ok : 0x54 0x5c
+// standby pwrOn : 0x3d 0x3f
 static void rc6_receive(uint8_t delay)
 {
 	char new_half_delay;
@@ -472,11 +474,20 @@ static void rc56_handle_code(void)
 	  case 0x09:
 		channel_set(keycode); // call with new (absolute) channel number
 		break;
-	  case 0x0c: // power/standby
+	  case 0x0c: // power/standby toggle
 		if (power_state() == 0)
 			power_incr = 1;
 		else if (power_state() == 2)
 			power_incr = -1;
+                break;
+            case 0x3d: // power Off (standby)
+                if (power_state() == 2)
+                    power_incr = -1;
+                break;
+            case 0x3f: // power On
+                if (power_state() == 0)
+                    power_incr = 1;
+                break;
 	  default:
 		break;
 	}

@@ -22,6 +22,23 @@ https://relaixed2.svn.sourceforge.net/svnroot/relaixed2
 
 Revision History of (1) RelaiXedApp:
 ====================================
+RelaixedApp-20160913, svn rev. 84:
+----------------------------------
+ - Completed software-support for a 16x2 OLED display on the I2C bus, works for the RelaiXedPassive.
+
+RelaixedApp-20160809, svn rev. 82:
+----------------------------------
+ - Support 2 or 3 relay-boards on the RelaixedPassive, providing left-right balance control
+   between the boards at i2c bus-address 0 and 1. A further board at 2 is not influenced by balance.
+   The latter is obtained by changing the PCB jumper-setting at A0 (JP301) on the mcp23017.
+
+RelaixedApp-20160306, svn rev. 81:
+----------------------------------
+ - Suppress any reaction on IR buttons '5' and '6' for the (4-input) RelaixedPassive
+ - Support separate IR power-up and power-down commands for remotes with such buttons
+Uploaded files are the 'RelaixedApp-20160306' which can be inserted through USB,
+and the 'RelaixedPicImage-20160306' which includes the USB bootloader, and can be inserted with a PIC programmer.
+
 RelaixedApp-20141104, svn rev. 78:
 ----------------------------------
  - Bug repair: at volume 00 the input relays must detach for real silence (bug was present since svn 68)

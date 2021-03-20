@@ -33,6 +33,7 @@
 #include "io_cfg.h"
 #include "usb_io.h"
 #include "amp_state.h"
+#include "relays.h"
 
 //#define OLED_addr 0x3c
 #define OLED_addr 0x78
@@ -49,8 +50,9 @@ static void oled_sendData(uint8_t data);
 static void oled_cursor(uint8_t col, uint8_t row);
 static void createChar(uint8_t location, const uint8_t charmap[]);
 static void oled_cmd_data( uint8_t cmd, uint8_t n, const uint8_t data[]);
+static void display_oled_chars(uint8_t row, uint8_t col, uint8_t len, const uint8_t chars[]);
+static void display_oled_bigchar(uint8_t col, uint8_t charnum);
 
-extern unsigned char myWriteI2C(unsigned char data_out);
 
 // Glyphs used to build big chars:
 // Each of these 8 glyphs will be stored in the display as custom char
@@ -109,10 +111,7 @@ uint8_t display_oled_init(void)
     
     // Check for OLED display, try twice..
     for (j=0; j<2; j++) {
-        StartI2C();
-        err = myWriteI2C(OLED_addr);
-        StopI2C();
-        SelectA = 1;
+        err = i2c_probe(OLED_addr);
 
         for (i=0; i<50; i++)
             ;
@@ -129,6 +128,8 @@ uint8_t display_oled_init(void)
 
         for (j=0; j<8; j++)
             createChar( j, bigcharGlyphs[j]);
+
+        display_oled_chars( 0, 0, 4, "init");
     }
 
     usb_write(oled_msg, (uint8_t) 5);
@@ -153,7 +154,6 @@ void display_oled_string(uint8_t row, uint8_t col, const char *string)
         myWriteI2C(c);
 
     StopI2C();
-    SelectA = 1;
     for (i=0; i<50; i++)
         ;
 }
@@ -173,19 +173,18 @@ static void oled_cmd_data(uint8_t cmd, uint8_t n, const uint8_t *data) {
             myWriteI2C(data[i]);
     }
     StopI2C();
-    SelectA = 1;
     for (i=0; i<50; i++)
         ;
 }
 
-void display_oled_chars(uint8_t row, uint8_t col, uint8_t len, const uint8_t chars[])
+static void display_oled_chars(uint8_t row, uint8_t col, uint8_t len, const uint8_t *chars)
 {
     uint8_t inx = col + (row ? 0x40 : 0);
 
     oled_cmd_data(OLED_DDRAMADDR | inx, len, chars);
 }
 
-void display_oled_bigchar(uint8_t col, uint8_t charnum) {
+static void display_oled_bigchar(uint8_t col, uint8_t charnum) {
     if (charnum >= 10)
         return;
 
@@ -193,20 +192,28 @@ void display_oled_bigchar(uint8_t col, uint8_t charnum) {
     display_oled_chars(1, col, 3, &bigchars[charnum][3]);
 }
 
-void display_oled_sleep(void) {
-    display_oled_chars(0,0,16,"                ");
-    display_oled_chars(1,0,16,"               .");
+void display_oled_power(uint8_t power) {
+    if (power == 0) { // entering standby mode
+        display_oled_chars(0,0,16,"                ");
+        display_oled_chars(1,0,16,"               .");
+    }
+    else if (power == 1) { // entering (temporary) power-up
+        display_oled_chars(0,0,16,"wake up         ");
+        display_oled_chars(1,0,16,"                ");
+    }
+    else if (power == 2) // prepare display for normal ON opersation
+        display_oled_chars(0,0,7,"       "); // erase wake-up msg
 }
 
 void display_oled_channel(uint8_t channel)
 {
-    static char chstr[2] = {'c', '-'};
+    static char chstr[6] = {'c', 'h', 'a', 'n', ' ', '-'};
 
     if (channel)
-        chstr[1] = '0'+ channel;
+        chstr[5] = '0' + channel;
     else
-        chstr[1] = '-';
-    display_oled_chars(0,14,2,chstr);
+        chstr[5] = '-';
+    display_oled_chars(0,10,6,chstr);
 }
 
 void display_oled_volume(uint8_t upperdigit, uint8_t lowdigit)
@@ -216,11 +223,34 @@ void display_oled_volume(uint8_t upperdigit, uint8_t lowdigit)
 }
 
 void display_oled_mute(void) {
-    display_oled_chars(1,11,5,"muted");
+    display_oled_chars(1,10,6," muted");
 }
 
+static uint8_t display_balance;
+
 void display_oled_unmute(void) {
-    display_oled_chars(1,11,5,"     ");
+    display_oled_balance(display_balance);
+}
+
+void display_oled_balance(int8_t balance) {
+    static char balstr[6] = {'b', 'a', 'l', ' ', ' ', ' '};
+    display_balance = balance;
+
+    if (balance == 0) {
+        display_oled_chars(1,10,6,"      ");
+        return;
+    }
+
+    if (balance > 0) {
+        balstr[4] = ' ';
+        balstr[5] = '0' + balance;
+    }
+    else if (balance < 0) {
+        balstr[4] = '-';
+        balstr[5] = '0' - balance;
+    }
+
+    display_oled_chars(1,10,6, balstr);
 }
 
 static void createChar(uint8_t location, const uint8_t charmap[]) {
@@ -236,7 +266,6 @@ static void oled_sendcommand(uint8_t command)
     myWriteI2C(OLED_Command_Mode);
     myWriteI2C(command);
     StopI2C();
-    SelectA = 1;
 
     for (i=0; i<50; i++)
         ;
